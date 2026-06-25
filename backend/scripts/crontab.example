@@ -1,0 +1,10 @@
+# Production backup schedule (Linux crontab) — replaces the macOS-only launchd agent.
+#
+# Install with:  crontab -e   (then paste, adjusting the path + DATABASE_URL)
+# or drop into:  /etc/cron.d/note-tracker-backup   (add a user field after the time spec)
+#
+# Daily PostgreSQL backup at 03:00. Output appended to backend/backups/backup.log.
+0 3 * * * cd /opt/note-tracker/backend && DATABASE_URL='postgresql://user:pass@host:5432/note_tracker' scripts/backup_pg.sh >> backups/backup.log 2>&1
+
+# For a still-SQLite deployment, use the SQLite script instead:
+# 0 3 * * * cd /opt/note-tracker/backend && scripts/backup_db.sh >> backups/backup.log 2>&1

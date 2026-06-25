@@ -1,0 +1,16 @@
+# systemd service for the daily Note Tracker backup (paired with the .timer).
+# Copy both unit files to /etc/systemd/system/, adjust the paths, then:
+#   systemctl daemon-reload && systemctl enable --now notetracker-backup.timer
+#
+[Unit]
+Description=Note Tracker daily PostgreSQL backup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Adjust to your deployment location. The EnvironmentFile must define DATABASE_URL
+# (and optionally RETENTION_DAYS / BACKUP_DIR).
+WorkingDirectory=/opt/note-tracker/backend
+EnvironmentFile=/opt/note-tracker/backend/.env
+ExecStart=/opt/note-tracker/backend/scripts/backup_pg.sh

@@ -1,0 +1,13 @@
+# systemd timer that runs notetracker-backup.service daily at 03:00.
+# Enable with:  systemctl enable --now notetracker-backup.timer
+#
+[Unit]
+Description=Run the Note Tracker backup daily
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+# Catch up on a missed run (e.g. server was off) at next boot.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

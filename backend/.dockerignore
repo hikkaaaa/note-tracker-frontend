@@ -1,0 +1,11 @@
+# Keep the build context small and free of host/local state.
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.db
+*.db-journal
+*.sqlite3
+backups/
+.env
+.pytest_cache/

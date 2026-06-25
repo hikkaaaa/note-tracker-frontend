@@ -1,0 +1,51 @@
+# Full local/production stack: PostgreSQL + FastAPI backend + Vite/nginx frontend.
+# Bring it all up with:  docker compose up --build
+#
+# Values come from a root .env file (see .env.example) with sensible defaults baked in
+# below, so the stack also runs with zero configuration. Works identically on Linux and
+# macOS — no host paths are referenced.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hixie}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hixie}
+      POSTGRES_DB: ${POSTGRES_DB:-note_tracker}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"   # exposed for psql/debugging; optional
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hixie} -d ${POSTGRES_DB:-note_tracker}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build: ./backend
+    environment:
+      # Points the app at the db service (not localhost) on the compose network.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-hixie}:${POSTGRES_PASSWORD:-hixie}@db:5432/${POSTGRES_DB:-note_tracker}
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-dev-only-insecure-secret-change-me}
+      # Must include the origin the browser loads the frontend from.
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Baked into the bundle; the browser calls the backend at this URL (host-side).
+        VITE_API_BASE: ${VITE_API_BASE:-http://localhost:8000}
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+
+volumes:
+  pgdata:
