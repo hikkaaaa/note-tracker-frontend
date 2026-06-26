@@ -8,7 +8,8 @@ import { authInputClass } from '../components/auth'
 import { clearAuth, getAuthToken, getAuthUser, updateAuthUser } from '../lib/authToken'
 import {
   ACCEPTED_AVATAR_TYPES,
-  getProfile,
+  emptyProfile,
+  fetchProfile,
   readAvatarFile,
   saveProfile,
   type Gender,
@@ -41,15 +42,26 @@ export function ProfilePage() {
   const authUser = getAuthUser()
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const [profile, setProfile] = useState<Profile>(() => getProfile())
+  const [profile, setProfile] = useState<Profile>(emptyProfile)
   const [avatarError, setAvatarError] = useState('')
   const [emailError, setEmailError] = useState('')
+  const [saveError, setSaveError] = useState('')
   const [saved, setSaved] = useState(false)
 
   // Gate behind a session, like the rest of the workspace.
   useEffect(() => {
     if (!getAuthToken()) navigate('/login', { replace: true })
   }, [navigate])
+
+  // Load the profile from the backend once the session is confirmed.
+  useEffect(() => {
+    if (!getAuthToken()) return
+    let cancelled = false
+    fetchProfile()
+      .then((p) => { if (!cancelled) setProfile(p) })
+      .catch(() => { if (!cancelled) setSaveError('Could not load your profile.') })
+    return () => { cancelled = true }
+  }, [])
 
   const initial = (authUser?.nickname?.[0] ?? 'H').toUpperCase()
 
@@ -66,22 +78,27 @@ export function ProfilePage() {
       const next = { ...profile, avatar: dataUrl }
       setProfile(next)
       // Persist immediately so the header pill updates even before "Save changes".
-      saveProfile(next)
+      await saveProfile(next)
     } catch (err) {
       setAvatarError((err as Error).message)
     }
     if (fileRef.current) fileRef.current.value = ''
   }
 
-  const removeAvatar = () => {
+  const removeAvatar = async () => {
     setAvatarError('')
     const next = { ...profile, avatar: '' }
     setProfile(next)
-    saveProfile(next)
+    try {
+      await saveProfile(next)
+    } catch (err) {
+      setAvatarError((err as Error).message)
+    }
   }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    setSaveError('')
     const email = profile.email.trim()
     if (email && !EMAIL_RE.test(email)) {
       setEmailError('Please enter a valid email address.')
@@ -94,11 +111,18 @@ export function ProfilePage() {
       lastName: profile.lastName.trim(),
       email,
     }
-    setProfile(next)
-    saveProfile(next)
-    // Keep the cached auth user (greeting UI) in sync with an edited email.
-    if (email && email !== authUser?.email) updateAuthUser({ email })
-    setSaved(true)
+    try {
+      const saved = await saveProfile(next)
+      setProfile(saved)
+      // Keep the cached auth user (greeting UI) in sync with an edited email.
+      if (saved.email && saved.email !== authUser?.email) updateAuthUser({ email: saved.email })
+      setSaved(true)
+    } catch (err) {
+      // The backend rejects a duplicate email here; surface it on the email field.
+      const message = (err as Error).message
+      if (/email/i.test(message)) setEmailError(message)
+      else setSaveError(message)
+    }
   }
 
   const handleLogout = () => {
@@ -260,6 +284,7 @@ export function ProfilePage() {
                   Save changes
                 </button>
                 {saved && <span className="text-sm font-medium text-[#7758A3]">Saved ✓</span>}
+                {saveError && <span className="text-sm font-medium text-[#E5484D]">{saveError}</span>}
               </div>
             </SettingsCard>
           </form>

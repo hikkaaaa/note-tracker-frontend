@@ -1,10 +1,9 @@
-// Client-side store for the editable profile fields shown on /profile.
+// The editable profile shown on /profile (names, gender, avatar, email).
 //
-// The backend User model only carries nickname/email/created_at, so the richer
-// profile metadata (names, gender, avatar image) lives in localStorage for this
-// sprint. Everything is namespaced by the current user's scope so two accounts
-// on the same browser keep separate profiles.
-import { currentUserScope, getAuthUser } from './authToken'
+// Persisted on the backend user row via /api/profile, so it follows the account
+// across devices and databases. (It previously lived in browser localStorage keyed
+// by numeric user id, which collided whenever the backing database was swapped.)
+import { authedFetch } from './api'
 
 export type Gender = '' | 'female' | 'male' | 'nonbinary' | 'prefer-not'
 
@@ -13,42 +12,61 @@ export interface Profile {
   lastName: string
   email: string
   gender: Gender
-  /** Uploaded avatar as a data URL, or '' to fall back to the gradient placeholder. */
   avatar: string
 }
 
-const key = () => `note-tracker.profile.${currentUserScope()}`
-
-// Largest avatar file we accept. base64 inflates by ~33%, and localStorage caps
-// around 5 MB per origin, so keep the source comfortably under that.
+// Largest avatar file we accept. base64 inflates by ~33%, so the backend caps the
+// stored string a bit higher; keep the source file comfortably small.
 export const MAX_AVATAR_BYTES = 2 * 1024 * 1024 // 2 MB
 export const ACCEPTED_AVATAR_TYPES = ['image/png', 'image/jpeg']
 
-function emptyProfile(): Profile {
-  // Seed the email from the authenticated account so the field isn't blank.
+export const emptyProfile = (): Profile => ({
+  firstName: '',
+  lastName: '',
+  email: '',
+  gender: '',
+  avatar: '',
+})
+
+// The API speaks snake_case; the app speaks camelCase.
+function fromApi(d: Record<string, unknown>): Profile {
   return {
-    firstName: '',
-    lastName: '',
-    email: getAuthUser()?.email ?? '',
-    gender: '',
-    avatar: '',
+    firstName: (d.first_name as string) ?? '',
+    lastName: (d.last_name as string) ?? '',
+    email: (d.email as string) ?? '',
+    gender: ((d.gender as string) ?? '') as Gender,
+    avatar: (d.avatar as string) ?? '',
   }
 }
 
-export function getProfile(): Profile {
-  if (typeof window === 'undefined') return emptyProfile()
-  const raw = window.localStorage.getItem(key())
-  if (!raw) return emptyProfile()
-  try {
-    return { ...emptyProfile(), ...(JSON.parse(raw) as Partial<Profile>) }
-  } catch {
-    return emptyProfile()
-  }
+export async function fetchProfile(): Promise<Profile> {
+  const res = await authedFetch('/api/profile')
+  if (!res.ok) throw new Error('Could not load your profile.')
+  return fromApi(await res.json())
 }
 
-export function saveProfile(profile: Profile) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(key(), JSON.stringify(profile))
+export async function saveProfile(profile: Profile): Promise<Profile> {
+  const res = await authedFetch('/api/profile', {
+    method: 'PUT',
+    body: JSON.stringify({
+      first_name: profile.firstName,
+      last_name: profile.lastName,
+      email: profile.email,
+      gender: profile.gender,
+      avatar: profile.avatar,
+    }),
+  })
+  if (!res.ok) {
+    let message = 'Could not save your profile.'
+    try {
+      const body = await res.json()
+      if (body?.detail) message = body.detail
+    } catch {
+      // non-JSON error body — keep the generic message
+    }
+    throw new Error(message)
+  }
+  return fromApi(await res.json())
 }
 
 // Validate a chosen avatar file and resolve to a data URL, or reject with a

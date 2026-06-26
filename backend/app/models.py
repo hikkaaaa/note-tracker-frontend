@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -13,6 +13,14 @@ class User(Base):
     # Stored in UTC. A callable default (not datetime.utcnow()) so each row gets
     # its own insert-time timestamp rather than import-time.
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    # Editable profile fields shown on /profile. Server-side default '' so the columns can be
+    # added NOT NULL to a pre-existing table and existing rows backfill cleanly. avatar holds a
+    # data-URL image (or '' for the gradient placeholder), hence Text rather than String.
+    first_name = Column(String, nullable=False, default="", server_default="")
+    last_name = Column(String, nullable=False, default="", server_default="")
+    gender = Column(String, nullable=False, default="", server_default="")
+    avatar = Column(Text, nullable=False, default="", server_default="")
 
     # Every folder belongs to exactly one user.
     folders = relationship("Folder", back_populates="owner", cascade="all, delete-orphan")

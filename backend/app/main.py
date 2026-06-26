@@ -48,6 +48,18 @@ def _migrate_soft_delete():
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN deleted_at DATETIME"))
 
 
+def _migrate_user_profile():
+    """Add the profile columns (first_name/last_name/gender/avatar) to a pre-existing users
+    table. NOT NULL with a '' default so existing rows backfill without a manual step."""
+    cols = [c["name"] for c in inspect(engine).get_columns("users")]
+    with engine.begin() as conn:
+        for col in ("first_name", "last_name", "gender"):
+            if col not in cols:
+                conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} VARCHAR NOT NULL DEFAULT ''"))
+        if "avatar" not in cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN avatar TEXT NOT NULL DEFAULT ''"))
+
+
 # These one-off ALTERs evolve a pre-existing *SQLite* file in place. A fresh database
 # (including the PostgreSQL target) gets the complete schema from create_all / Alembic,
 # so they only run on SQLite.
@@ -55,6 +67,7 @@ if IS_SQLITE:
     _migrate_section_title()
     _migrate_folder_user_id()
     _migrate_soft_delete()
+    _migrate_user_profile()
 
 app = FastAPI(title="Note Tracker API")
 
@@ -234,6 +247,51 @@ def login(payload: schemas.UserLogin, db: Session = Depends(get_db)):
     )
     token = auth.create_access_token(user.id, expires_minutes=expires)
     return schemas.TokenResponse(access_token=token, user=user)
+
+
+# --- PROFILE ROUTES ---
+
+# Cap the avatar payload so a pathological data URL can't bloat the row / response.
+# Mirrors the 2 MB source-file limit the frontend enforces, with headroom for base64.
+_MAX_AVATAR_CHARS = 3 * 1024 * 1024
+
+
+@app.get("/api/profile", response_model=schemas.ProfileResponse)
+def get_profile(user: models.User = Depends(get_current_user)):
+    return user
+
+
+@app.put("/api/profile", response_model=schemas.ProfileResponse)
+def update_profile(
+    payload: schemas.ProfileUpdate,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    data = payload.model_dump(exclude_unset=True)
+
+    # Email doubles as a login-unique field, so changing it needs the same guard as register.
+    if data.get("email"):
+        new_email = data["email"].strip().lower()
+        if new_email != user.email:
+            clash = (
+                db.query(models.User)
+                .filter(models.User.email == new_email, models.User.id != user.id)
+                .first()
+            )
+            if clash:
+                raise HTTPException(status_code=400, detail="That email is already registered.")
+            user.email = new_email
+
+    if data.get("avatar") and len(data["avatar"]) > _MAX_AVATAR_CHARS:
+        raise HTTPException(status_code=400, detail="That image is too large.")
+
+    for field in ("first_name", "last_name", "gender", "avatar"):
+        if field in data and data[field] is not None:
+            setattr(user, field, data[field])
+
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 # --- FOLDER ROUTES ---

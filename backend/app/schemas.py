@@ -28,6 +28,25 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     user: UserResponse
 
+# --- PROFILE ---
+# The editable profile shown on /profile. Persisted on the user row so it follows the
+# account across devices and databases (it used to live in browser localStorage).
+class ProfileResponse(BaseModel):
+    first_name: str
+    last_name: str
+    email: EmailStr
+    gender: str
+    avatar: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+class ProfileUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    gender: Optional[str] = None
+    avatar: Optional[str] = None
+
 # --- SECTIONS ---
 class SectionCreate(BaseModel):
     type: str

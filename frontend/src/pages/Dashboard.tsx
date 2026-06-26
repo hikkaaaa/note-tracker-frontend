@@ -10,7 +10,7 @@ import { fetchFolders, createFolder, updateFolder, deleteFolder } from '../lib/w
 import { fetchTrash, fetchTrashFolderNotes, restoreFolder, restoreNote, purgeFolderForever, purgeNoteForever } from '../lib/workspace'
 import type { TrashFolderItem } from '../lib/workspace'
 import { getAuthToken, getAuthUser } from '../lib/authToken'
-import { getProfile } from '../lib/profile'
+import { fetchProfile } from '../lib/profile'
 import { getSwatch } from '../lib/folderColors'
 import { BrandLogo } from '../components/BrandLogo'
 
@@ -120,12 +120,22 @@ export function Dashboard() {
   const [menuOpenId, setMenuOpenId] = useState<number | null>(null)
 
   const authUser = getAuthUser()
-  const avatar = getProfile().avatar
+  const [avatar, setAvatar] = useState('')
 
   // Gate the dashboard behind a session: no token → straight to login.
   useEffect(() => {
     if (!getAuthToken()) navigate('/login', { replace: true })
   }, [navigate])
+
+  // Pull the avatar from the backend profile for the header pill.
+  useEffect(() => {
+    if (!getAuthToken()) return
+    let cancelled = false
+    fetchProfile()
+      .then((p) => { if (!cancelled) setAvatar(p.avatar) })
+      .catch(() => { /* header falls back to the initial glyph */ })
+    return () => { cancelled = true }
+  }, [])
 
   // Load the signed-in user's folders from the backend.
   useEffect(() => {
