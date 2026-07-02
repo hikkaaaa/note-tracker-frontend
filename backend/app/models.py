@@ -1,7 +1,12 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from .database import Base
+
+
+def _utcnow() -> datetime:
+    """Naive UTC, matching the rest of the app (SQLite stores/compares naive datetimes)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 class User(Base):
     __tablename__ = "users"
@@ -40,6 +45,13 @@ class Folder(Base):
     # Primary navigation queries filter these out; the Trash panel surfaces them, and the
     # 7-day auto-purge hard-deletes rows whose deleted_at is older than the retention window.
     deleted_at = Column(DateTime, nullable=True)
+    # Organizational flags. pinned floats a folder to the "Pinned" filter; archived moves it
+    # out of "All" into the "Archive" filter. Both default off so existing rows are unchanged.
+    pinned = Column(Boolean, nullable=False, default=False, server_default="0")
+    archived = Column(Boolean, nullable=False, default=False, server_default="0")
+    # Last time the folder's own fields changed. The "Recent" filter combines this with the
+    # newest note activity inside the folder (see _folder_out).
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
     owner = relationship("User", back_populates="folders")
     notes = relationship("Note", back_populates="folder", cascade="all, delete-orphan")
@@ -57,6 +69,15 @@ class Note(Base):
     # Soft-delete marker (see Folder.deleted_at). A note can be trashed on its own while
     # its parent folder stays live (the folder then appears in Trash as a container).
     deleted_at = Column(DateTime, nullable=True)
+    # Two independent organizational marks: starred drives the "Starred" filter; pinned
+    # floats the note to the top of its folder. (A note can be both.)
+    starred = Column(Boolean, nullable=False, default=False, server_default="0")
+    pinned = Column(Boolean, nullable=False, default=False, server_default="0")
+    # Activity tracking. created_at is set once on insert; updated_at bumps on any title/
+    # purpose/flag change AND whenever a section (block) is created, edited, or removed, so
+    # "Recent" reflects real editing — not just metadata edits.
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
     folder = relationship("Folder", back_populates="notes")
     sections = relationship("Section", back_populates="note", cascade="all, delete-orphan")

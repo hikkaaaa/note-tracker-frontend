@@ -10,7 +10,7 @@ interface SiteHeaderProps {
 }
 
 const navLink =
-  'inline-flex items-center gap-1.5 rounded-full px-[18px] py-2.5 text-sm font-medium text-[var(--text-primary)] no-underline transition-colors hover:bg-[#7758A3]/[0.08]'
+  'inline-flex items-center gap-1.5 rounded-full px-[18px] py-2.5 text-sm font-medium text-[var(--text-primary)] no-underline transition-colors hover:bg-[#4F46E5]/[0.08]'
 
 export function SiteHeader({ cta, homeActive = false }: SiteHeaderProps) {
   return (
@@ -18,7 +18,7 @@ export function SiteHeader({ cta, homeActive = false }: SiteHeaderProps) {
       <Link to="/" className="flex items-center gap-2 text-[var(--text-primary)] no-underline">
         <BrandLogo size={44} />
         <span className="text-[18px] font-bold leading-none tracking-[-0.01em]">
-          hixie<span className="text-[#F99A00]">.</span>
+          hixie<span className="text-[#F97316]">.</span>
         </span>
       </Link>
 
@@ -35,13 +35,6 @@ export function SiteHeader({ cta, homeActive = false }: SiteHeaderProps) {
             Home
           </Link>
         )}
-        <a className={`${navLink} cursor-pointer`}>
-          For individuals <span className="font-normal opacity-50">+</span>
-        </a>
-        <a className={`${navLink} cursor-pointer`}>
-          For teams <span className="font-normal opacity-50">+</span>
-        </a>
-        <a className={`${navLink} cursor-pointer`}>Pricing</a>
       </nav>
 
       <Link

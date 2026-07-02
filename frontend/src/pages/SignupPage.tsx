@@ -30,7 +30,7 @@ const STRENGTH = [
   { label: 'Weak', color: '#DB3E8C' },
   { label: 'Okay', color: '#F6C45C' },
   { label: 'Good', color: '#82BA88' },
-  { label: 'Strong', color: '#7758A3' },
+  { label: 'Strong', color: '#4F46E5' },
 ]
 
 export function SignupPage() {
@@ -154,7 +154,7 @@ export function SignupPage() {
                     type="button"
                     onClick={() => setShowPwd((v) => !v)}
                     aria-label="Toggle password visibility"
-                    className="absolute right-3 top-1/2 grid -translate-y-1/2 cursor-pointer place-items-center rounded-md bg-transparent p-1.5 text-[#6E5F7B] hover:text-[#7758A3]"
+                    className="absolute right-3 top-1/2 grid -translate-y-1/2 cursor-pointer place-items-center rounded-md bg-transparent p-1.5 text-[#6E5F7B] hover:text-[#4F46E5]"
                   >
                     <EyeIcon open={showPwd} />
                   </button>
@@ -164,7 +164,7 @@ export function SignupPage() {
                     <span
                       key={i}
                       className="h-1 rounded-full transition-colors"
-                      style={{ background: meetsMin && strength >= i ? STRENGTH[strength].color : 'rgba(119,88,163,0.12)' }}
+                      style={{ background: meetsMin && strength >= i ? STRENGTH[strength].color : 'rgba(79,70,229,0.12)' }}
                     />
                   ))}
                 </div>
@@ -177,8 +177,8 @@ export function SignupPage() {
                 </span>
                 <span className="pt-px">
                   I agree to the{' '}
-                  <a className="font-semibold text-[#7758A3] hover:underline">Terms</a> and{' '}
-                  <a className="font-semibold text-[#7758A3] hover:underline">Privacy Policy</a>.
+                  <a className="font-semibold text-[#4F46E5] hover:underline">Terms</a> and{' '}
+                  <a className="font-semibold text-[#4F46E5] hover:underline">Privacy Policy</a>.
                 </span>
               </label>
 
@@ -201,8 +201,8 @@ export function SignupPage() {
                 ) : (
                   <>
                     Create account
-                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#F6C45C]">
-                      <ArrowRight size={13} color="#1B1326" />
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
+                      <ArrowRight size={13} color="#FFFFFF" />
                     </span>
                   </>
                 )}
@@ -211,7 +211,7 @@ export function SignupPage() {
 
             <div className="mt-[22px] text-center text-sm text-[#6E5F7B]">
               Already have an account?{' '}
-              <Link to="/login" className="font-semibold text-[#F99A00] no-underline hover:underline">
+              <Link to="/login" className="font-semibold text-[#4F46E5] no-underline hover:underline">
                 Log in →
               </Link>
             </div>

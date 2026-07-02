@@ -646,7 +646,7 @@ export function NoteEditorPage() {
       className="relative min-h-screen overflow-x-clip"
       style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)', fontFamily: geist, ['--accent' as string]: accent.swatch, ['--accent-tint' as string]: accent.tint } as React.CSSProperties}
     >
-      <PageBackdrop />
+      <PageBackdrop cursor={false} />
       <header className="sticky top-0 z-40 border-b border-[var(--border-subtle)] bg-[var(--bg-primary)]/85 backdrop-blur-md print:hidden">
         <div className="mx-auto flex max-w-[1500px] items-center gap-4 px-5 py-3 sm:px-10">
           <button
@@ -727,7 +727,7 @@ export function NoteEditorPage() {
           <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
             <h1 className="m-0 font-extrabold leading-[1.04] tracking-[-0.035em]" style={{ fontFamily: bricolage, fontSize: 'clamp(38px, 5.5vw, 68px)' }}>
               {note ? note.title : 'Loading…'}
-              <span className="bg-clip-text text-transparent" style={{ backgroundImage: `linear-gradient(120deg, ${accent.swatch}, #F99A00)` }}>.</span>
+              <span className="bg-clip-text text-transparent" style={{ backgroundImage: `linear-gradient(120deg, ${accent.swatch}, #4F46E5)` }}>.</span>
             </h1>
           </div>
           {note?.purpose && (
@@ -753,7 +753,7 @@ export function NoteEditorPage() {
             <div className="flex max-h-[calc(100vh_-_7rem)] w-[64px] flex-col gap-2.5 lg:w-[280px]">
               <div className="flex flex-shrink-0 items-center justify-center px-1 lg:justify-between">
                 <span className="hidden text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-secondary)] lg:inline">Drag to add</span>
-                <Plus className="h-3.5 w-3.5 text-[#F59E0B]" />
+                <Plus className="h-3.5 w-3.5 text-[#4F46E5]" />
               </div>
               <div className="flex min-h-0 flex-col gap-2 overflow-y-auto px-1 py-1.5 -mx-1">
                 {BLOCK_DEFS.map((b) => (
@@ -768,10 +768,6 @@ export function NoteEditorPage() {
                     onClick={() => addSection(b.type)}
                   />
                 ))}
-              </div>
-              <div className="mt-3 hidden flex-shrink-0 flex-col gap-1.5 rounded-2xl border border-dashed border-[var(--border-subtle)] bg-[var(--text-primary)]/[0.03] px-3.5 py-3 text-[11px] text-[var(--text-secondary)] lg:flex">
-                <p className="m-0">Drag a tile onto the page, or drop one beside a block to make columns.</p>
-                <p className="m-0">⌘Z restores a deleted block.</p>
               </div>
             </div>
             </motion.aside>
@@ -808,7 +804,7 @@ export function NoteEditorPage() {
             <div className="flex max-h-[calc(100vh_-_7rem)] w-[64px] flex-col gap-2.5 lg:w-[280px]">
               <div className="flex flex-shrink-0 items-center justify-center px-1 lg:justify-between">
                 <span className="hidden text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-secondary)] lg:inline">Tools</span>
-                <TimerIcon className="h-3.5 w-3.5 text-[#F59E0B]" />
+                <TimerIcon className="h-3.5 w-3.5 text-[#4F46E5]" />
               </div>
               <div className="flex min-h-0 flex-col gap-2 overflow-y-auto px-1 py-1.5 -mx-1">
                 {TOOL_DEFS.map((t) => (
@@ -1110,14 +1106,14 @@ function BlockRenderer({ section, onChange, onTitleChange, onDelete, onCopy, onP
           <div className="absolute right-0 mt-1 w-36 overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] py-1.5 shadow-[0_10px_24px_-8px_rgba(27,19,38,0.18),0_24px_60px_-20px_rgba(27,19,38,0.3)] animate-modal-in z-50">
             <button
               onClick={() => { onCopy(); setMenuOpen(false); }}
-              className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[13px] font-medium text-[var(--text-primary)] transition-colors hover:bg-[#7758A3]/[0.08]"
+              className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[13px] font-medium text-[var(--text-primary)] transition-colors hover:bg-[#4F46E5]/[0.08]"
             >
               <Copy className="h-4 w-4" /> Copy
             </button>
             <button
               onClick={() => { onPaste(); setMenuOpen(false); }}
               disabled={!canPaste}
-              className={`flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[13px] font-medium transition-colors ${canPaste ? 'text-[var(--text-primary)] hover:bg-[#7758A3]/[0.08]' : 'cursor-not-allowed text-[var(--text-secondary)] opacity-50'}`}
+              className={`flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[13px] font-medium transition-colors ${canPaste ? 'text-[var(--text-primary)] hover:bg-[#4F46E5]/[0.08]' : 'cursor-not-allowed text-[var(--text-secondary)] opacity-50'}`}
             >
               <ClipboardPaste className="h-4 w-4" /> Paste
             </button>
@@ -1125,14 +1121,14 @@ function BlockRenderer({ section, onChange, onTitleChange, onDelete, onCopy, onP
               showTitle ? (
                 <button
                   onClick={() => { onTitleChange(null); setMenuOpen(false); }}
-                  className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[13px] font-medium text-[var(--text-primary)] transition-colors hover:bg-[#7758A3]/[0.08]"
+                  className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[13px] font-medium text-[var(--text-primary)] transition-colors hover:bg-[#4F46E5]/[0.08]"
                 >
                   <Heading className="h-4 w-4" /> Remove title
                 </button>
               ) : (
                 <button
                   onClick={() => { onTitleChange(''); setMenuOpen(false); }}
-                  className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[13px] font-medium text-[var(--text-primary)] transition-colors hover:bg-[#7758A3]/[0.08]"
+                  className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[13px] font-medium text-[var(--text-primary)] transition-colors hover:bg-[#4F46E5]/[0.08]"
                 >
                   <Heading className="h-4 w-4" /> Add title
                 </button>

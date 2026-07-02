@@ -95,7 +95,7 @@ export function LoginPage() {
               <label className="flex flex-col gap-1.5">
                 <span className="flex items-baseline justify-between text-[13px] font-semibold">
                   Password
-                  <button type="button" className="cursor-pointer bg-transparent text-[12px] font-medium text-[#7758A3] hover:underline">
+                  <button type="button" className="cursor-pointer bg-transparent text-[12px] font-medium text-[#4F46E5] hover:underline">
                     Forgot?
                   </button>
                 </span>
@@ -112,7 +112,7 @@ export function LoginPage() {
                     type="button"
                     onClick={() => setShowPwd((v) => !v)}
                     aria-label="Toggle password visibility"
-                    className="absolute right-3 top-1/2 grid -translate-y-1/2 cursor-pointer place-items-center rounded-md bg-transparent p-1.5 text-[#6E5F7B] hover:text-[#7758A3]"
+                    className="absolute right-3 top-1/2 grid -translate-y-1/2 cursor-pointer place-items-center rounded-md bg-transparent p-1.5 text-[#6E5F7B] hover:text-[#4F46E5]"
                   >
                     <EyeIcon open={showPwd} />
                   </button>
@@ -146,8 +146,8 @@ export function LoginPage() {
                 ) : (
                   <>
                     Log in
-                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#F6C45C]">
-                      <ArrowRight size={13} color="#1B1326" />
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
+                      <ArrowRight size={13} color="#FFFFFF" />
                     </span>
                   </>
                 )}
@@ -156,7 +156,7 @@ export function LoginPage() {
 
             <div className="mt-[22px] text-center text-sm text-[#6E5F7B]">
               New here?{' '}
-              <Link to="/signup" className="font-semibold text-[#F99A00] no-underline hover:underline">
+              <Link to="/signup" className="font-semibold text-[#4F46E5] no-underline hover:underline">
                 Create an account →
               </Link>
             </div>
@@ -168,8 +168,8 @@ export function LoginPage() {
 
       <div className="text-center text-[12px] text-[#6E5F7B]">
         By logging in you agree to our{' '}
-        <a className="cursor-pointer text-[#7758A3] hover:underline">Terms</a> and{' '}
-        <a className="cursor-pointer text-[#7758A3] hover:underline">Privacy Policy</a>.
+        <a className="cursor-pointer text-[#4F46E5] hover:underline">Terms</a> and{' '}
+        <a className="cursor-pointer text-[#4F46E5] hover:underline">Privacy Policy</a>.
       </div>
     </AuthLayout>
   )

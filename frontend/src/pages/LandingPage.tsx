@@ -18,14 +18,14 @@ const STEP_ORDER: Status[] = ['tutorial_step_1', 'tutorial_step_2', 'tutorial_st
 
 /* mock data for the hero folder→note preview */
 const FOLDERS = [
-  { id: 'fs', name: 'Fullstack', swatch: '#3B82F6', tint: 'rgba(59,130,246,0.12)', notes: [
-    { t: 'REST vs GraphQL', s: 'API design notes' }, { t: 'Auth & JWT flows', s: 'Sessions, refresh' }, { t: 'Deploy checklist', s: 'CI/CD steps' },
+  { id: 'ck', name: 'Cooking', swatch: '#F59E0B', tint: 'rgba(245,158,11,0.12)', notes: [
+    { t: 'Weeknight pasta', s: 'Garlic & chili oil' }, { t: 'Sourdough log', s: 'Day-by-day notes' }, { t: 'Grocery list', s: 'Weekly staples' },
   ] },
-  { id: 'pj', name: 'Projects', swatch: '#10B981', tint: 'rgba(16,185,129,0.12)', notes: [
-    { t: 'Face recognition', s: 'OpenCV + FastAPI' }, { t: 'Side-project ideas', s: 'Running backlog' },
+  { id: 'tr', name: 'Travel', swatch: '#3B82F6', tint: 'rgba(59,130,246,0.12)', notes: [
+    { t: 'Japan itinerary', s: 'Tokyo → Kyoto' }, { t: 'Packing list', s: 'Carry-on only' },
   ] },
-  { id: 'bt', name: 'Big Tech Prep', swatch: '#8B5CF6', tint: 'rgba(139,92,246,0.12)', notes: [
-    { t: 'DSA patterns', s: 'Sliding window…' }, { t: 'System design', s: 'Scaling basics' }, { t: 'Behavioral', s: 'STAR stories' },
+  { id: 'hm', name: 'Home', swatch: '#10B981', tint: 'rgba(16,185,129,0.12)', notes: [
+    { t: 'Plant care', s: 'Watering schedule' }, { t: 'Weekend projects', s: 'Shelf build' }, { t: 'Budget', s: 'Monthly spend' },
   ] },
 ]
 
@@ -72,7 +72,7 @@ export function LandingPage() {
     >
       <PageBackdrop />
 
-      <div className="relative z-[2] mx-auto flex h-full w-full max-w-[1440px] flex-col px-5 pt-6 sm:px-10">
+      <div className="relative z-[2] mx-auto flex h-full w-full max-w-[1440px] flex-col px-5 pt-6 sm:px-10 lg:px-16">
         <div className="shrink-0">
           <SiteHeader homeActive cta={{ label: 'Log In', to: '/login' }} />
         </div>
@@ -115,28 +115,30 @@ function Hero({ onLearnMore }: { onLearnMore: () => void }) {
   return (
     <div className="flex h-full items-center justify-center">
      {/* centered in the stage, then nudged up ~half the header height so it reads as
-         optically centered in the full viewport rather than sitting low. */}
-     <div className="grid w-full max-w-[1240px] grid-cols-1 items-center gap-10 lg:-translate-y-[52px] lg:grid-cols-[1fr_540px] lg:gap-20">
+         optically centered in the full viewport rather than sitting low. Two balanced
+         halves (1fr/1fr) with items-center so the text stack and the preview card share the
+         same vertical axis and read as proportional. */}
+     <div className="grid w-full max-w-[1260px] grid-cols-1 items-center gap-10 lg:-translate-y-[52px] lg:grid-cols-[1fr_600px] lg:gap-14">
       <div className="text-center lg:text-left">
-        <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] px-3.5 py-1.5 text-[12.5px] font-semibold text-[var(--text-secondary)] shadow-[0_8px_22px_-16px_rgba(27,19,38,0.2)]">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" /> Welcome to hixie — modular notes for fast minds
-        </span>
+        {/* Plain, upright type. "fast" gets a soft purple highlight bar behind it (the word
+            itself stays the body color); "structured" is a purple→deep-indigo gradient with a
+            clearly visible shift. (see rebrand spec) */}
         <h1
-          className="mx-auto mt-5 max-w-[680px] text-[clamp(42px,5.8vw,82px)] font-extrabold leading-[0.98] tracking-[-0.035em] lg:mx-0"
+          className="mx-auto mt-5 max-w-[560px] text-[clamp(40px,5vw,74px)] font-extrabold leading-[0.98] tracking-[-0.035em] lg:mx-0"
           style={{ fontFamily: bricolage }}
         >
           Capture{' '}
-          <span className="relative inline-block">
-            <span aria-hidden className="absolute inset-x-[-4px] bottom-[0.08em] h-[0.32em] rounded bg-[#F6C45C] opacity-85" />
-            <span className="relative">fast</span>
-          </span>
-          .<br />
+          <span
+            className="box-decoration-clone rounded-[0.12em] px-[0.08em]"
+            style={{ background: 'linear-gradient(180deg, transparent 42%, rgba(139,92,246,0.28) 42%, rgba(139,92,246,0.28) 78%, transparent 78%)' }}
+          >fast</span>.
+          <br />
           Stay{' '}
-          <span className="bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(120deg,#FFC24B,#F99A00,#F26A1B)' }}>structured</span>
-          <span className="text-[#F99A00]">.</span>
+          <span className="bg-gradient-to-r from-[#8B5CF6] to-[#4338CA] bg-clip-text text-transparent">structured</span>
+          <span className="text-[#4338CA]">.</span>
         </h1>
         <p className="mx-auto mt-5 max-w-[480px] text-[17px] leading-[1.55] text-[var(--text-secondary)] lg:mx-0">
-          Folders, notes, and drag-in tools — a clean, modular workspace that keeps up with your speed.
+          Welcome to hixie — modular notes for fast minds
         </p>
         <div className="mt-7 flex justify-center gap-3 lg:justify-start">
           <button
@@ -150,7 +152,7 @@ function Hero({ onLearnMore }: { onLearnMore: () => void }) {
             className="inline-flex items-center gap-2 rounded-full bg-[var(--btn-primary-bg)] px-[24px] py-3.5 text-[15px] font-semibold text-[var(--btn-primary-text)] no-underline shadow-[0_12px_28px_-14px_rgba(27,19,38,0.5)] transition-transform hover:-translate-y-px"
           >
             Get Started
-            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#F6C45C]"><ArrowRight size={13} color="#1B1326" /></span>
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/20"><ArrowRight size={13} color="#FFFFFF" /></span>
           </Link>
         </div>
       </div>
@@ -184,7 +186,7 @@ function FolderNotePreview() {
       data-cursor-block
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
-      className="w-full max-w-[540px] overflow-hidden rounded-[24px] border border-[var(--border-subtle)] bg-[var(--surface)] shadow-[0_36px_80px_-30px_rgba(27,19,38,0.42)]"
+      className="w-full max-w-[600px] overflow-hidden rounded-[24px] border border-[var(--border-subtle)] bg-[var(--surface)] shadow-[0_36px_80px_-30px_rgba(27,19,38,0.42)]"
     >
       {/* window bar */}
       <div className="flex items-center gap-2 border-b border-[var(--border-subtle)] px-4 py-3">
@@ -218,7 +220,7 @@ function FolderNotePreview() {
         </div>
 
         {/* notes for the active folder */}
-        <div className="min-h-[268px] p-3.5">
+        <div className="min-h-[312px] p-3.5">
           <div className="mb-2 flex items-center justify-between px-1">
             <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--text-secondary)]">Notes</span>
             <span className="text-[10px] font-semibold" style={{ color: folder.swatch }}>{folder.name}</span>
@@ -286,12 +288,12 @@ function TutorialStage({ status, stepIndex, onNext, onBack, onSkip }: {
               <span
                 className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-bold transition-colors"
                 style={{
-                  borderColor: on ? '#8B5CF6' : 'var(--border-subtle)',
-                  background: on ? 'rgba(139,92,246,0.1)' : done ? 'rgba(16,185,129,0.1)' : 'var(--surface)',
-                  color: on ? '#8B5CF6' : done ? '#10B981' : 'var(--text-secondary)',
+                  borderColor: on ? '#4F46E5' : 'var(--border-subtle)',
+                  background: on ? 'rgba(79,70,229,0.1)' : done ? 'rgba(16,185,129,0.1)' : 'var(--surface)',
+                  color: on ? '#4F46E5' : done ? '#10B981' : 'var(--text-secondary)',
                 }}
               >
-                <span className="grid h-4 w-4 place-items-center rounded-full text-[10px] text-white" style={{ background: on ? '#8B5CF6' : done ? '#10B981' : 'var(--text-secondary)' }}>
+                <span className="grid h-4 w-4 place-items-center rounded-full text-[10px] text-white" style={{ background: on ? '#4F46E5' : done ? '#10B981' : 'var(--text-secondary)' }}>
                   {done ? <Check className="h-2.5 w-2.5" /> : i + 1}
                 </span>
                 {s.key}
@@ -308,8 +310,10 @@ function TutorialStage({ status, stepIndex, onNext, onBack, onSkip }: {
         <p className="mx-auto mt-1 max-w-[460px] text-[13.5px] text-[var(--text-secondary)]">{meta.desc}</p>
       </div>
 
-      {/* morphing mock — bounded height + clip so it never forces a scrollbar */}
-      <div className="relative grid max-h-[46vh] w-full place-items-center overflow-hidden">
+      {/* morphing mock — height bounded for layout, but overflow stays visible so the mock's
+          soft drop shadow isn't clipped (the page shell is already overflow-hidden, so this
+          can't introduce a scrollbar). */}
+      <div className="relative grid max-h-[46vh] w-full place-items-center overflow-visible">
         <div className="origin-center scale-[0.8] sm:scale-90 lg:scale-100">
           <AnimatePresence mode="wait">
             <motion.div
@@ -354,22 +358,22 @@ const MOCK_W = 'w-[560px] max-w-[86vw]'
 
 /* Step 1 — folder creation modal (mirrors CreateFolderModal tokens) */
 function FolderModalMock() {
-  const name = useTypewriter('Research Notes')
+  const name = useTypewriter('Cooking')
   const swatches = ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#D946EF', '#FA7268']
   return (
     <div className={`${MOCK_W} overflow-hidden rounded-3xl bg-[var(--surface)] shadow-[0_30px_80px_-20px_rgba(15,23,42,0.35)]`}>
       <div className="flex items-center gap-3.5 border-b border-[var(--border-subtle)] px-6 py-4">
         <span className="grid h-11 w-11 place-items-center rounded-2xl" style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.14), rgba(236,72,153,0.10))' }}>
-          <Folder className="h-[24px] w-[24px] text-[#8B5CF6]" />
+          <Folder className="h-[24px] w-[24px] text-[#4F46E5]" />
         </span>
         <h3 className="text-[20px] font-extrabold tracking-[-0.025em]" style={{ fontFamily: bricolage }}>New Folder</h3>
         <span className="ml-auto grid h-9 w-9 place-items-center rounded-[10px] text-[var(--text-secondary)]"><X className="h-[18px] w-[18px]" /></span>
       </div>
       <div className="flex flex-col gap-4 px-6 py-5">
         <div>
-          <div className="mb-1.5 text-[13px] font-bold">Folder Name <span className="text-[#F99A00]">*</span></div>
-          <div className="flex items-center rounded-xl border-[1.5px] border-[#8B5CF6] bg-[var(--surface)] px-3.5 py-2.5 text-[14px] ring-4 ring-[#8B5CF6]/15">
-            {name}<span className="ml-0.5 inline-block h-[16px] w-[2px] animate-pulse bg-[#8B5CF6]" />
+          <div className="mb-1.5 text-[13px] font-bold">Folder Name <span className="text-[#4F46E5]">*</span></div>
+          <div className="flex items-center rounded-xl border-[1.5px] border-[#4F46E5] bg-[var(--surface)] px-3.5 py-2.5 text-[14px] ring-4 ring-[#4F46E5]/15">
+            {name}<span className="ml-0.5 inline-block h-[16px] w-[2px] animate-pulse bg-[#4F46E5]" />
           </div>
         </div>
         <div>
@@ -385,7 +389,7 @@ function FolderModalMock() {
           <motion.span
             animate={{ scale: [1, 0.95, 1], boxShadow: ['0 8px 16px -6px rgba(139,92,246,0.45)', '0 4px 10px -6px rgba(139,92,246,0.6)', '0 8px 16px -6px rgba(139,92,246,0.45)'] }}
             transition={{ duration: 1.6, repeat: Infinity, repeatDelay: 0.8 }}
-            className="rounded-xl bg-[#8B5CF6] px-5 py-2.5 text-[13px] font-bold text-white"
+            className="bg-[var(--btn-primary-bg)] rounded-xl px-5 py-2.5 text-[13px] font-bold text-white"
           >
             Create Folder
           </motion.span>
@@ -397,7 +401,7 @@ function FolderModalMock() {
 
 /* Step 2 — note creation modal (green accent, mirrors CreateNoteModal) */
 function NoteModalMock() {
-  const name = useTypewriter('Q1 Marketing Plan')
+  const name = useTypewriter('Weekend Projects')
   return (
     <div className={`${MOCK_W} overflow-hidden rounded-3xl bg-[var(--surface)] shadow-[0_30px_80px_-20px_rgba(15,23,42,0.35)]`}>
       <div className="flex items-center gap-3.5 border-b border-[var(--border-subtle)] px-6 py-4">
@@ -407,14 +411,14 @@ function NoteModalMock() {
         <div>
           <h3 className="text-[20px] font-extrabold leading-none tracking-[-0.025em]" style={{ fontFamily: bricolage }}>New Note</h3>
           <div className="mt-1 flex items-center gap-1.5 text-[12px] text-[var(--text-secondary)]">
-            in <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-bold" style={{ background: 'rgba(16,185,129,0.12)', color: '#10B981' }}><span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" />Projects</span>
+            in <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-bold" style={{ background: 'rgba(16,185,129,0.12)', color: '#10B981' }}><span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" />Home</span>
           </div>
         </div>
         <span className="ml-auto grid h-9 w-9 place-items-center rounded-[10px] text-[var(--text-secondary)]"><X className="h-[18px] w-[18px]" /></span>
       </div>
       <div className="flex flex-col gap-4 px-6 py-5">
         <div>
-          <div className="mb-1.5 text-[13px] font-bold">Note Name <span className="text-[#F99A00]">*</span></div>
+          <div className="mb-1.5 text-[13px] font-bold">Note Name <span className="text-[#4F46E5]">*</span></div>
           <div className="flex items-center rounded-xl border-[1.5px] border-[#10B981] bg-[var(--surface)] px-3.5 py-2.5 text-[14px] ring-4 ring-[#10B981]/15">
             {name}<span className="ml-0.5 inline-block h-[16px] w-[2px] animate-pulse bg-[#10B981]" />
           </div>

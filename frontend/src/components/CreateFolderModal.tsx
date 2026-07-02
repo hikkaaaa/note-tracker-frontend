@@ -93,9 +93,9 @@ export function CreateFolderModal({ isOpen, onClose, onSubmit, onSuccess, initia
           <div className="flex items-center gap-3.5">
             <span
               className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl"
-              style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.14), rgba(236,72,153,0.10))' }}
+              style={{ background: 'linear-gradient(135deg, rgba(79,70,229,0.14), rgba(236,72,153,0.10))' }}
             >
-              <NotebookPen className="h-[26px] w-[26px] text-[#8B5CF6]" strokeWidth={2.2} />
+              <NotebookPen className="h-[26px] w-[26px] text-[#4F46E5]" strokeWidth={2.2} />
             </span>
             <h2 id="modal-title" className="m-0 text-[22px] font-extrabold tracking-[-0.025em]" style={{ fontFamily: bricolage }}>
               {isEditing ? 'Edit Folder' : 'New Folder'}
@@ -114,7 +114,7 @@ export function CreateFolderModal({ isOpen, onClose, onSubmit, onSuccess, initia
         <form id="create-folder-form" onSubmit={handleSubmit} noValidate className="flex flex-col gap-5 px-6 pb-6 pt-[22px]">
           <div className="flex flex-col gap-2">
             <label htmlFor="folder-name" className="text-[15px] font-bold tracking-[-0.01em]">
-              Folder Name <span className="text-[#F99A00]">*</span>
+              Folder Name <span className="text-[#4F46E5]">*</span>
             </label>
             <input
               ref={nameInputRef}
@@ -124,7 +124,7 @@ export function CreateFolderModal({ isOpen, onClose, onSubmit, onSuccess, initia
               value={form.name}
               maxLength={NAME_CHAR_LIMIT}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              className="w-full rounded-xl border-[1.5px] border-transparent bg-[#F4F5F8] px-3.5 py-3 text-[15px] outline-none transition-all placeholder:text-[#94A3B8] focus:border-[#8B5CF6] focus:bg-[var(--surface)] focus:ring-4 focus:ring-[#8B5CF6]/15"
+              className="w-full rounded-xl border-[1.5px] border-transparent bg-[#F4F5F8] px-3.5 py-3 text-[15px] outline-none transition-all placeholder:text-[#94A3B8] focus:border-[#4F46E5] focus:bg-[var(--surface)] focus:ring-4 focus:ring-[#4F46E5]/15"
             />
           </div>
 
@@ -143,7 +143,7 @@ export function CreateFolderModal({ isOpen, onClose, onSubmit, onSuccess, initia
               placeholder="e.g. Collecting notes for Q2 market research"
               value={form.purpose}
               onChange={(e) => handleDescChange(e.target.value)}
-              className="min-h-[96px] w-full resize-y rounded-xl border-[1.5px] border-transparent bg-[#F4F5F8] px-3.5 py-3 text-[15px] leading-relaxed outline-none transition-all placeholder:text-[#94A3B8] focus:border-[#8B5CF6] focus:bg-[var(--surface)] focus:ring-4 focus:ring-[#8B5CF6]/15"
+              className="min-h-[96px] w-full resize-y rounded-xl border-[1.5px] border-transparent bg-[#F4F5F8] px-3.5 py-3 text-[15px] leading-relaxed outline-none transition-all placeholder:text-[#94A3B8] focus:border-[#4F46E5] focus:bg-[var(--surface)] focus:ring-4 focus:ring-[#4F46E5]/15"
             />
           </div>
 
@@ -194,7 +194,7 @@ export function CreateFolderModal({ isOpen, onClose, onSubmit, onSuccess, initia
               type="submit"
               id="create-folder-submit-btn"
               disabled={!canSubmit}
-              className="rounded-xl bg-[#8B5CF6] px-[22px] py-[11px] text-sm font-bold text-white shadow-[0_8px_16px_-6px_rgba(139,92,246,0.45)] transition-transform hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none disabled:hover:translate-y-0"
+              className="bg-[var(--btn-primary-bg)] rounded-xl px-[22px] py-[11px] text-sm font-bold text-white shadow-[0_8px_16px_-6px_rgba(79,70,229,0.45)] transition-transform hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none disabled:hover:translate-y-0"
             >
               {isEditing ? 'Save Changes' : 'Create Folder'}
             </button>

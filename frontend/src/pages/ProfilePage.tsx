@@ -3,7 +3,6 @@ import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { BrandLogo } from '../components/BrandLogo'
-import { CursorField } from '../components/CursorField'
 import { authInputClass } from '../components/auth'
 import { clearAuth, getAuthToken, getAuthUser, updateAuthUser } from '../lib/authToken'
 import {
@@ -29,9 +28,8 @@ const GENDERS: { value: Gender; label: string }[] = [
 ]
 
 const THEME_CARDS: { value: Theme; label: string; hint: string; swatch: string }[] = [
-  { value: 'light', label: 'Light', hint: 'Clean copybook grid', swatch: '#FBF7F2' },
-  { value: 'dark', label: 'Dark', hint: 'Soft near-black', swatch: '#14151A' },
-  { value: 'pink', label: 'Pink', hint: 'Soft pastel hue', swatch: '#FBE3EE' },
+  { value: 'light', label: 'Light', hint: 'Cool slate-white', swatch: '#F4F5FB' },
+  { value: 'dark', label: 'Dark', hint: 'Deep midnight', swatch: '#15161F' },
 ]
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -137,8 +135,8 @@ export function ProfilePage() {
     >
       {/* background halos + grid (matches the dashboard canvas) */}
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-        <div className="absolute rounded-full" style={{ width: 600, height: 600, top: -140, left: -180, background: 'rgba(219,62,140,0.08)', filter: 'blur(90px)' }} />
-        <div className="absolute rounded-full" style={{ width: 640, height: 640, bottom: -200, right: -200, background: 'rgba(119,88,163,0.10)', filter: 'blur(90px)' }} />
+        <div className="absolute rounded-full" style={{ width: 600, height: 600, top: -140, left: -180, background: 'rgba(99,102,241,0.08)', filter: 'blur(90px)' }} />
+        <div className="absolute rounded-full" style={{ width: 640, height: 640, bottom: -200, right: -200, background: 'rgba(79,70,229,0.10)', filter: 'blur(90px)' }} />
         <div
           className="absolute inset-0"
           style={{
@@ -151,14 +149,13 @@ export function ProfilePage() {
           }}
         />
       </div>
-      <CursorField />
 
       <div className="relative z-[1] mx-auto max-w-[760px] px-5 pb-20 pt-5 sm:px-8 sm:pt-7">
         <header className="mb-9 flex items-center justify-between">
           <Link to="/dashboard" className="flex items-center gap-2 no-underline text-[var(--text-primary)]">
             <BrandLogo size={44} />
             <span className="text-[18px] font-bold leading-none tracking-[-0.01em]">
-              hixie<span style={{ color: '#F99A00' }}>.</span>
+              hixie<span style={{ color: '#F97316' }}>.</span>
             </span>
           </Link>
           <Link
@@ -178,7 +175,7 @@ export function ProfilePage() {
           <div>
             <h1 className="m-0 font-extrabold leading-[1.05] tracking-[-0.03em]" style={{ fontFamily: bricolage, fontSize: 'clamp(34px, 5vw, 52px)' }}>
               Profile
-              <span className="bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(120deg, #FFC24B, #F99A00, #F26A1B)' }}>.</span>
+              <span className="bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(120deg, #6366F1, #4F46E5, #4338CA)' }}>.</span>
             </h1>
             <p className="mt-2 text-sm text-[var(--text-secondary)]">Manage your avatar, details, and the look of your space.</p>
           </div>
@@ -189,8 +186,8 @@ export function ProfilePage() {
                 <img src={profile.avatar} alt="Your avatar" className="h-[88px] w-[88px] flex-shrink-0 rounded-full object-cover shadow-[0_8px_22px_-12px_rgba(27,19,38,0.4)]" />
               ) : (
                 <span
-                  className="grid h-[88px] w-[88px] flex-shrink-0 place-items-center rounded-full text-[34px] font-extrabold text-white shadow-[0_8px_22px_-12px_rgba(119,88,163,0.6)]"
-                  style={{ background: 'linear-gradient(135deg, #FFC24B, #F99A00)', fontFamily: bricolage }}
+                  className="grid h-[88px] w-[88px] flex-shrink-0 place-items-center rounded-full text-[34px] font-extrabold text-white shadow-[0_8px_22px_-12px_rgba(79,70,229,0.6)]"
+                  style={{ background: 'linear-gradient(135deg, #6366F1, #4F46E5)', fontFamily: bricolage }}
                 >
                   {initial}
                 </span>
@@ -283,7 +280,7 @@ export function ProfilePage() {
                 >
                   Save changes
                 </button>
-                {saved && <span className="text-sm font-medium text-[#7758A3]">Saved ✓</span>}
+                {saved && <span className="text-sm font-medium text-[#4F46E5]">Saved ✓</span>}
                 {saveError && <span className="text-sm font-medium text-[#E5484D]">{saveError}</span>}
               </div>
             </SettingsCard>
@@ -301,8 +298,8 @@ export function ProfilePage() {
                     aria-pressed={active}
                     className={`flex items-center gap-3 rounded-2xl border-[1.5px] p-3.5 text-left transition-all ${
                       active
-                        ? 'border-[#8B5CF6] bg-[#7758A3]/[0.12] ring-4 ring-[#7758A3]/[0.12]'
-                        : 'border-[var(--border-subtle)] bg-[var(--surface)] hover:border-[#8B5CF6]/50'
+                        ? 'border-[#4F46E5] bg-[#4F46E5]/[0.12] ring-4 ring-[#4F46E5]/[0.12]'
+                        : 'border-[var(--border-subtle)] bg-[var(--surface)] hover:border-[#4F46E5]/50'
                     }`}
                   >
                     <span

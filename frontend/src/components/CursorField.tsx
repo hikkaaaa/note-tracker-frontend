@@ -14,9 +14,9 @@ import { useEffect, useRef } from 'react'
  * bleeds across cards or hurts readability.
  */
 
-// Static orange aura tones — warm core melting into a deeper edge.
-const ORANGE_CORE: [number, number, number] = [255, 168, 84] // soft amber
-const ORANGE_EDGE: [number, number, number] = [249, 115, 22] // tailwind orange-500
+// Static indigo aura tones — light core melting into a deeper brand edge.
+const AURA_CORE: [number, number, number] = [129, 140, 248] // indigo-400
+const AURA_EDGE: [number, number, number] = [79, 70, 229] // indigo-600 (brand)
 
 const GRID = 60 // matches the CSS copybook grid cell size
 const GRID_RADIUS = 200 // how far the grid reacts around the cursor
@@ -143,8 +143,8 @@ export function CursorField() {
       // The aura sticks to the pointer — no spring, no lag, no trail.
       const cx = pointer.x
       const cy = pointer.y
-      const c1 = ORANGE_CORE
-      const c2 = ORANGE_EDGE
+      const c1 = AURA_CORE
+      const c2 = AURA_EDGE
       const vis = field // static opacity (only fades in/out over UI)
 
       ctx.clearRect(0, 0, width, height)

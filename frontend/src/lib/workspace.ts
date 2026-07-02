@@ -11,6 +11,10 @@ interface ApiNote {
   title: string
   purpose?: string | null
   folder_id: number
+  starred?: boolean
+  pinned?: boolean
+  created_at?: string | null
+  updated_at?: string | null
 }
 
 interface ApiFolder {
@@ -18,14 +22,23 @@ interface ApiFolder {
   name: string
   purpose?: string | null
   color?: string | null
+  pinned?: boolean
+  archived?: boolean
+  last_activity?: string | null
   notes?: ApiNote[]
 }
 
-// The backend has no per-note created_at column yet, so notes carry an empty created_at
-// (the UI falls back gracefully). Notes have no color of their own; they inherit their
-// parent folder's color at render time.
+// Notes have no color of their own; they inherit their parent folder's color at render time.
 function mapNote(n: ApiNote): LocalNote {
-  return { id: n.id, title: n.title, purpose: n.purpose ?? undefined, created_at: '' }
+  return {
+    id: n.id,
+    title: n.title,
+    purpose: n.purpose ?? undefined,
+    created_at: n.created_at ?? '',
+    updated_at: n.updated_at ?? '',
+    starred: Boolean(n.starred),
+    pinned: Boolean(n.pinned),
+  }
 }
 
 function mapFolder(f: ApiFolder): LocalFolder {
@@ -34,6 +47,9 @@ function mapFolder(f: ApiFolder): LocalFolder {
     name: f.name,
     purpose: f.purpose ?? '',
     color: normalizeFolderColor(f.color ?? undefined),
+    pinned: Boolean(f.pinned),
+    archived: Boolean(f.archived),
+    lastActivity: f.last_activity ?? '',
     notes: (f.notes ?? []).map(mapNote),
   }
 }
@@ -64,7 +80,7 @@ export async function createFolder(input: {
 
 export async function updateFolder(
   id: number,
-  patch: { name?: string; purpose?: string; color?: FolderColor },
+  patch: { name?: string; purpose?: string; color?: FolderColor; pinned?: boolean; archived?: boolean },
 ): Promise<LocalFolder> {
   const res = await authedFetch(`/folders/${id}`, { method: 'PUT', body: JSON.stringify(patch) })
   if (!res.ok) throw new Error('Could not update the folder.')
@@ -90,7 +106,7 @@ export async function createNote(
 
 export async function updateNote(
   id: number,
-  patch: { title?: string; purpose?: string },
+  patch: { title?: string; purpose?: string; starred?: boolean; pinned?: boolean },
 ): Promise<LocalNote> {
   const res = await authedFetch(`/notes/${id}`, { method: 'PUT', body: JSON.stringify(patch) })
   if (!res.ok) throw new Error('Could not update the note.')

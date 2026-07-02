@@ -74,12 +74,18 @@ class NoteCreate(BaseModel):
 class NoteUpdate(BaseModel):
     title: Optional[str] = None
     purpose: Optional[str] = None
+    starred: Optional[bool] = None
+    pinned: Optional[bool] = None
 
 class NoteResponse(BaseModel):
     id: int
     title: str
     purpose: Optional[str] = None
     folder_id: int
+    starred: bool = False
+    pinned: bool = False
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     sections: List[SectionResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
@@ -94,6 +100,8 @@ class FolderUpdate(BaseModel):
     name: Optional[str] = None
     purpose: Optional[str] = None
     color: Optional[str] = None
+    pinned: Optional[bool] = None
+    archived: Optional[bool] = None
 
 class FolderResponse(BaseModel):
     id: int
@@ -101,6 +109,11 @@ class FolderResponse(BaseModel):
     purpose: Optional[str] = None
     color: Optional[str] = "blue"
     user_id: Optional[int] = None
+    pinned: bool = False
+    archived: bool = False
+    # Newest activity in this folder — max of the folder's own updated_at and its live
+    # notes' updated_at. Drives the dashboard "Recent" filter.
+    last_activity: Optional[datetime] = None
     notes: List[NoteResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
