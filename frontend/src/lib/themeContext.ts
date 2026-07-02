@@ -3,7 +3,7 @@
 // and so any component can read the theme via useTheme().
 import { createContext, useContext } from 'react'
 
-export const THEMES = ['light', 'dark', 'pink'] as const
+export const THEMES = ['light', 'dark'] as const
 export type Theme = (typeof THEMES)[number]
 
 export const THEME_STORAGE_KEY = 'note-tracker.theme'
@@ -16,7 +16,7 @@ export function readStoredTheme(): Theme {
 }
 
 // Apply immediately on module load (before React mounts) so the first paint is
-// already themed and we avoid a light→dark flash for remembered dark/pink users.
+// already themed and we avoid a light→dark flash for remembered dark users.
 if (typeof document !== 'undefined') {
   document.documentElement.dataset.theme = readStoredTheme()
 }

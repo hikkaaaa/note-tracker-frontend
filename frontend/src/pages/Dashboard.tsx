@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { RotateCcw, Trash2, ChevronLeft, FileText, FolderOpen, Info } from 'lucide-react'
-import { CursorField } from '../components/CursorField'
+import { RotateCcw, Trash2, ChevronLeft, FileText, FolderOpen, Info, Pin, PinOff, Archive, ArchiveRestore, Users } from 'lucide-react'
 import { CreateFolderModal } from '../components/CreateFolderModal'
 import type { FormState as FolderFormState } from '../components/CreateFolderModal'
 import { DeleteFolderModal } from '../components/DeleteFolderModal'
@@ -13,9 +12,23 @@ import { getAuthToken, getAuthUser } from '../lib/authToken'
 import { fetchProfile } from '../lib/profile'
 import { getSwatch } from '../lib/folderColors'
 import { BrandLogo } from '../components/BrandLogo'
+import { CardActionMenu } from '../components/CardActionMenu'
 
 const bricolage = "'Quicksand', sans-serif"
 const geist = "'Poppins', ui-sans-serif, sans-serif"
+
+/* Blend a hex color toward another (t = amount of `toward`, 0..1). Used to mute the
+   vibrant folder swatches into soft pastels — easy on the eyes but still color-coded. */
+function mixHex(hex: string, toward: string, t: number): string {
+  const parse = (h: string) => {
+    const n = parseInt(h.replace('#', ''), 16)
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+  }
+  const a = parse(hex)
+  const b = parse(toward)
+  const c = a.map((v, i) => Math.round(v + (b[i] - v) * t))
+  return `rgb(${c[0]}, ${c[1]}, ${c[2]})`
+}
 
 /* ---------- inline icons (match the design 1:1) ---------- */
 const PlusIcon = ({ size = 14 }: { size?: number }) => (
@@ -95,10 +108,41 @@ type Tab = 'folders' | 'all-notes' | 'trash'
 const NAV_LINKS: { label: string; tab?: Tab }[] = [
   { label: 'Folders', tab: 'folders' },
   { label: 'All notes', tab: 'all-notes' },
-  { label: 'Shared' },
   { label: 'Trash', tab: 'trash' },
 ]
-const FILTERS = ['All', 'Pinned', 'Recent', 'Shared', 'Archive']
+const FILTERS = ['All', 'Pinned', 'Recent', 'Shared', 'Archive'] as const
+type Filter = (typeof FILTERS)[number]
+
+// "Recent" = worked with in the last 14 days (folder or any of its notes edited).
+const RECENT_WINDOW_MS = 14 * 24 * 60 * 60 * 1000
+
+// The backend sends naive UTC timestamps (no zone suffix). Tag them as UTC before parsing,
+// otherwise the browser reads them as local time and the recency math is off by the user's
+// timezone offset.
+function parseServerDate(iso: string): number {
+  if (!iso) return NaN
+  const hasZone = /[zZ]|[+-]\d{2}:?\d{2}$/.test(iso)
+  return new Date(hasZone ? iso : `${iso}Z`).getTime()
+}
+
+function isRecent(iso: string, now: number): boolean {
+  if (!iso) return false
+  const t = parseServerDate(iso)
+  return !Number.isNaN(t) && now - t <= RECENT_WINDOW_MS
+}
+
+// Does a folder belong under the given filter tab? Archived folders only ever appear under
+// "Archive"; everything else is scoped to live (non-archived) folders.
+function matchesFilter(folder: LocalFolder, filter: Filter, now: number): boolean {
+  switch (filter) {
+    case 'Pinned': return folder.pinned && !folder.archived
+    case 'Recent': return !folder.archived && isRecent(folder.lastActivity, now)
+    case 'Shared': return false // no sharing backend yet — tab shows a "coming soon" state
+    case 'Archive': return folder.archived
+    case 'All':
+    default: return !folder.archived
+  }
+}
 
 // One note paired with the folder it lives in — the unit rendered in the All Notes grid.
 interface NoteWithFolder {
@@ -113,6 +157,7 @@ export function Dashboard() {
   const [loadError, setLoadError] = useState('')
   const [q, setQ] = useState('')
   const [tab, setTab] = useState<Tab>('folders')
+  const [filter, setFilter] = useState<Filter>('All')
   const [view, setView] = useState<ViewMode>('grid')
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false)
   const [editingFolder, setEditingFolder] = useState<LocalFolder | null>(null)
@@ -149,23 +194,35 @@ export function Dashboard() {
     return () => { cancelled = true }
   }, [])
 
+  // Folder counts per filter tab (search-independent) for the pill badges.
+  const filterCounts = useMemo(() => {
+    const now = Date.now()
+    return Object.fromEntries(
+      FILTERS.map((f) => [f, folders.filter((folder) => matchesFilter(folder, f, now)).length]),
+    ) as Record<Filter, number>
+  }, [folders])
+
   const filtered = useMemo(() => {
+    const now = Date.now()
+    const byFilter = folders.filter((folder) => matchesFilter(folder, filter, now))
     const k = q.trim().toLowerCase()
-    if (!k) return folders
-    return folders.filter(
+    if (!k) return byFilter
+    return byFilter.filter(
       (folder) =>
         folder.name.toLowerCase().includes(k) || folder.purpose.toLowerCase().includes(k),
     )
-  }, [folders, q])
+  }, [folders, q, filter])
 
-  const totalNotes = folders.reduce((sum, folder) => sum + folder.notes.length, 0)
+  // "All notes" view ignores archived folders so archived content doesn't leak back in.
+  const liveFolders = useMemo(() => folders.filter((f) => !f.archived), [folders])
+  const totalNotes = liveFolders.reduce((sum, folder) => sum + folder.notes.length, 0)
 
   // Flat list of every note across all folders, each tagged with its origin folder —
   // backs the "All notes" view. fetchFolders already returns notes nested per folder,
   // so no extra request is needed.
   const allNotes = useMemo<NoteWithFolder[]>(
-    () => folders.flatMap((folder) => folder.notes.map((note) => ({ note, folder }))),
-    [folders],
+    () => liveFolders.flatMap((folder) => folder.notes.map((note) => ({ note, folder }))),
+    [liveFolders],
   )
 
   const filteredNotes = useMemo(() => {
@@ -220,6 +277,20 @@ export function Dashboard() {
     }
   }
 
+  // Optimistically toggle a folder flag, rolling back if the backend write fails.
+  const patchFolderFlag = async (folder: LocalFolder, patch: { pinned?: boolean; archived?: boolean }) => {
+    setMenuOpenId(null)
+    setFolders((current) => current.map((f) => (f.id === folder.id ? { ...f, ...patch } : f)))
+    try {
+      await updateFolder(folder.id, patch)
+    } catch (err) {
+      setFolders((current) => current.map((f) => (f.id === folder.id ? folder : f)))
+      setLoadError((err as Error)?.message ?? 'Could not update the folder.')
+    }
+  }
+  const handleTogglePin = (folder: LocalFolder) => patchFolderFlag(folder, { pinned: !folder.pinned })
+  const handleToggleArchive = (folder: LocalFolder) => patchFolderFlag(folder, { archived: !folder.archived })
+
   return (
     <div
       className="relative min-h-screen overflow-x-hidden"
@@ -227,9 +298,9 @@ export function Dashboard() {
     >
       {/* background halos + grid */}
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-        <div className="absolute rounded-full" style={{ width: 600, height: 600, top: -120, left: -160, background: 'rgba(219,62,140,0.08)', filter: 'blur(90px)' }} />
-        <div className="absolute rounded-full" style={{ width: 720, height: 720, top: '25%', right: -240, background: 'rgba(119,88,163,0.10)', filter: 'blur(90px)' }} />
-        <div className="absolute rounded-full" style={{ width: 500, height: 500, bottom: -180, left: '30%', background: 'rgba(246,196,92,0.08)', filter: 'blur(90px)' }} />
+        <div className="absolute rounded-full" style={{ width: 600, height: 600, top: -120, left: -160, background: 'rgba(99,102,241,0.08)', filter: 'blur(90px)' }} />
+        <div className="absolute rounded-full" style={{ width: 720, height: 720, top: '25%', right: -240, background: 'rgba(79,70,229,0.10)', filter: 'blur(90px)' }} />
+        <div className="absolute rounded-full" style={{ width: 500, height: 500, bottom: -180, left: '30%', background: 'rgba(129,140,248,0.07)', filter: 'blur(90px)' }} />
         <div
           className="absolute inset-0"
           style={{
@@ -242,14 +313,13 @@ export function Dashboard() {
           }}
         />
       </div>
-      <CursorField />
 
       <div className="relative z-[1] mx-auto max-w-[1440px] px-5 pb-16 pt-5 sm:px-10 sm:pb-20 sm:pt-7">
         <header className="relative z-[5] mb-9 grid grid-cols-[1fr_auto] items-center gap-6 md:grid-cols-[1fr_auto_1fr]">
           <a href="/" className="flex items-center gap-2 no-underline" style={{ color: 'var(--text-primary)' }}>
             <BrandLogo size={44} />
             <span className="text-[18px] font-bold leading-none tracking-[-0.01em]">
-              hixie<span style={{ color: '#F99A00' }}>.</span>
+              hixie<span style={{ color: '#F97316' }}>.</span>
             </span>
           </a>
 
@@ -264,7 +334,7 @@ export function Dashboard() {
                   className={`rounded-full px-[18px] py-2.5 text-sm font-medium transition-colors ${
                     active
                       ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)]'
-                      : 'text-[var(--text-primary)] hover:bg-[#7758A3]/[0.08]'
+                      : 'text-[var(--text-primary)] hover:bg-[#4F46E5]/[0.08]'
                   }`}
                 >
                   {link.label}
@@ -280,7 +350,7 @@ export function Dashboard() {
               className="relative grid h-[42px] w-[42px] place-items-center rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-primary)] shadow-[0_8px_22px_-16px_rgba(27,19,38,0.2)] transition-transform hover:-translate-y-px"
             >
               <BellIcon />
-              <span className="absolute right-[11px] top-[9px] h-2 w-2 rounded-full bg-[#F99A00] ring-2 ring-white" />
+              <span className="absolute right-[11px] top-[9px] h-2 w-2 rounded-full bg-[#4F46E5] ring-2 ring-white" />
             </button>
             <Link
               to="/profile"
@@ -297,7 +367,7 @@ export function Dashboard() {
               ) : (
                 <span
                   className="grid h-8 w-8 place-items-center rounded-full text-[13px] font-bold text-white"
-                  style={{ background: 'linear-gradient(135deg, #FFC24B, #F99A00)', fontFamily: bricolage }}
+                  style={{ background: 'linear-gradient(135deg, #6366F1, #4F46E5)', fontFamily: bricolage }}
                 >
                   {(authUser?.nickname?.[0] ?? '?').toUpperCase()}
                 </span>
@@ -311,39 +381,26 @@ export function Dashboard() {
           <TrashView />
         ) : (
         <>
-        {/* hero header */}
-        <section className="relative z-[3] mb-8 grid grid-cols-1 items-end gap-8 lg:grid-cols-[1fr_auto]">
-          <div>
-            <h1
-              className="m-0 font-extrabold leading-[1.05] tracking-[-0.035em]"
-              style={{ fontFamily: bricolage, fontSize: 'clamp(40px, 6.4vw, 84px)' }}
-            >
-              {tab === 'all-notes' ? 'All Notes' : 'My Folders'}
-              <span
-                className="inline-block bg-clip-text text-transparent"
-                style={{ backgroundImage: 'linear-gradient(120deg, #FFC24B, #F99A00, #F26A1B)' }}
-              >
-                .
-              </span>
-            </h1>
-            <p className="mt-[18px] text-sm tracking-[-0.005em] text-[var(--text-secondary)]">
-              {tab === 'all-notes' ? (
-                <>
-                  <b className="font-semibold text-[var(--text-primary)]">{totalNotes}</b> note{totalNotes !== 1 ? 's' : ''} across{' '}
-                  <b className="font-semibold text-[var(--text-primary)]">{folders.length}</b> folder{folders.length !== 1 ? 's' : ''}
-                </>
-              ) : (
-                <>
-                  <b className="font-semibold text-[var(--text-primary)]">{folders.length}</b> folder{folders.length !== 1 ? 's' : ''}
-                  <span className="mx-3 inline-block h-1 w-1 -translate-y-px rounded-full bg-[#6E5F7B] opacity-50 align-middle" />
-                  <b className="font-semibold text-[var(--text-primary)]">{totalNotes}</b> note{totalNotes !== 1 ? 's' : ''}
-                </>
-              )}
-            </p>
-          </div>
+        {/* action bar — the big "My Folders" title is gone; the search + create controls
+            now live in this space and stretch the full width of the page */}
+        <section className="relative z-[3] mb-8">
+          <p className="mb-3.5 text-sm tracking-[-0.005em] text-[var(--text-secondary)]">
+            {tab === 'all-notes' ? (
+              <>
+                <b className="font-semibold text-[var(--text-primary)]">{totalNotes}</b> note{totalNotes !== 1 ? 's' : ''} across{' '}
+                <b className="font-semibold text-[var(--text-primary)]">{liveFolders.length}</b> folder{liveFolders.length !== 1 ? 's' : ''}
+              </>
+            ) : (
+              <>
+                <b className="font-semibold text-[var(--text-primary)]">{liveFolders.length}</b> folder{liveFolders.length !== 1 ? 's' : ''}
+                <span className="mx-3 inline-block h-1 w-1 -translate-y-px rounded-full bg-[#6E5F7B] opacity-50 align-middle" />
+                <b className="font-semibold text-[var(--text-primary)]">{totalNotes}</b> note{totalNotes !== 1 ? 's' : ''}
+              </>
+            )}
+          </p>
 
-          <div className="flex flex-col gap-2.5 lg:min-w-[340px]">
-            <div className="flex items-center gap-2.5 rounded-[14px] border-[1.5px] border-[var(--border-subtle)] bg-[var(--surface)] px-3.5 py-3 shadow-[0_10px_28px_-16px_rgba(27,19,38,0.18)] transition-all focus-within:border-[#8B5CF6] focus-within:ring-4 focus-within:ring-[#7758A3]/[0.12]">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex flex-1 items-center gap-2.5 rounded-[16px] border-[1.5px] border-[var(--border-subtle)] bg-[var(--surface)] px-4 py-3.5 shadow-[0_10px_28px_-16px_rgba(27,19,38,0.18)] transition-all focus-within:border-[#4F46E5] focus-within:ring-4 focus-within:ring-[#4F46E5]/[0.12]">
               <span className="grid place-items-center text-[var(--text-secondary)]"><SearchIcon /></span>
               <input
                 id="folder-search"
@@ -358,9 +415,9 @@ export function Dashboard() {
             <button
               type="button"
               onClick={openCreateFolder}
-              className="inline-flex items-center justify-center gap-2.5 rounded-full bg-[var(--btn-primary-bg)] py-[13px] pl-2 pr-[22px] text-sm font-semibold text-[var(--btn-primary-text)] shadow-[0_14px_30px_-16px_rgba(27,19,38,0.5)] transition-transform hover:-translate-y-px"
+              className="inline-flex shrink-0 items-center justify-center gap-2.5 rounded-full bg-[var(--btn-primary-bg)] py-[14px] pl-2.5 pr-8 text-sm font-semibold text-[var(--btn-primary-text)] shadow-[0_14px_30px_-16px_rgba(27,19,38,0.5)] transition-transform hover:-translate-y-px"
             >
-              <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-[#F59E0B] text-[#1B1326]">
+              <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-white/20 text-white">
                 <PlusIcon size={13} />
               </span>
               New folder
@@ -372,22 +429,27 @@ export function Dashboard() {
         <div className="relative z-[3] mb-7 flex flex-col items-stretch justify-between gap-3 border-b border-dashed border-[var(--border-subtle)] pb-[18px] sm:flex-row sm:items-center sm:gap-[18px]">
           <div className="flex flex-wrap gap-1.5">
             {FILTERS.map((label) => {
-              const on = label === 'All'
+              const on = label === filter
+              const count = filterCounts[label]
               return (
                 <button
                   key={label}
                   type="button"
+                  onClick={() => setFilter(label)}
                   className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[13px] font-medium transition-colors ${
                     on
                       ? 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-primary)] shadow-[0_6px_18px_-12px_rgba(27,19,38,0.18)]'
-                      : 'border-transparent text-[var(--text-secondary)] hover:bg-[#7758A3]/[0.06] hover:text-[var(--text-primary)]'
+                      : 'border-transparent text-[var(--text-secondary)] hover:bg-[#4F46E5]/[0.06] hover:text-[var(--text-primary)]'
                   }`}
                 >
                   {label === 'Pinned' && <SparkleIcon size={11} />}
+                  {label === 'Recent' && <RotateCcw size={12} />}
+                  {label === 'Shared' && <Users size={12} />}
+                  {label === 'Archive' && <Archive size={12} />}
                   {label}
-                  {on && (
-                    <span className="rounded-full bg-[#7758A3]/10 px-1.5 py-0.5 text-[11px] text-[#8B5CF6]">
-                      {folders.length}
+                  {on && label !== 'Shared' && (
+                    <span className="rounded-full bg-[#4F46E5]/10 px-1.5 py-0.5 text-[11px] text-[#4F46E5]">
+                      {count}
                     </span>
                   )}
                 </button>
@@ -420,13 +482,13 @@ export function Dashboard() {
 
         {loading && (
           <div className="relative z-[2] flex items-center justify-center gap-3 py-20 text-[var(--text-secondary)]">
-            <span className="h-5 w-5 animate-spin rounded-full border-[2.5px] border-[#7758A3]/25 border-t-[#7758A3]" />
+            <span className="h-5 w-5 animate-spin rounded-full border-[2.5px] border-[#4F46E5]/25 border-t-[#4F46E5]" />
             Loading your folders…
           </div>
         )}
 
         {/* folder grid / list */}
-        {!loading && tab === 'folders' && (
+        {!loading && tab === 'folders' && filter !== 'Shared' && filtered.length > 0 && (
         <main
           className={
             view === 'grid'
@@ -451,21 +513,15 @@ export function Dashboard() {
                 setDeletingFolder(folder)
                 setMenuOpenId(null)
               }}
+              onTogglePin={() => handleTogglePin(folder)}
+              onToggleArchive={() => handleToggleArchive(folder)}
             />
           ))}
-          <NewFolderTile view={view} onClick={openCreateFolder} />
         </main>
         )}
 
-        {!loading && tab === 'folders' && filtered.length === 0 && q.trim() && (
-          <div className="relative z-[2] py-[60px] text-center text-[var(--text-secondary)]">
-            <div className="mx-auto mb-3 grid h-16 w-16 place-items-center rounded-[18px] border border-[var(--border-subtle)] bg-[var(--surface)]">
-              <FolderGlyph size={28} color="#8B5CF6" />
-            </div>
-            <p>
-              No folders match "<b className="text-[var(--text-primary)]">{q}</b>". Try a different search.
-            </p>
-          </div>
+        {!loading && tab === 'folders' && (filter === 'Shared' || filtered.length === 0) && (
+          <FoldersEmpty filter={filter} query={q} onCreate={openCreateFolder} />
         )}
 
         {/* All-notes grid — every note across folders, tagged with its origin color */}
@@ -473,7 +529,7 @@ export function Dashboard() {
           filteredNotes.length === 0 ? (
             <div className="relative z-[2] py-[60px] text-center text-[var(--text-secondary)]">
               <div className="mx-auto mb-3 grid h-16 w-16 place-items-center rounded-[18px] border border-[var(--border-subtle)] bg-[var(--surface)]">
-                <FolderGlyph size={28} color="#8B5CF6" />
+                <FolderGlyph size={28} color="#4F46E5" />
               </div>
               <p>
                 {q.trim()
@@ -532,6 +588,8 @@ function FolderCard({
   onMenuClose,
   onEdit,
   onDelete,
+  onTogglePin,
+  onToggleArchive,
 }: {
   folder: LocalFolder
   view: ViewMode
@@ -540,95 +598,80 @@ function FolderCard({
   onMenuClose: () => void
   onEdit: () => void
   onDelete: () => void
+  onTogglePin: () => void
+  onToggleArchive: () => void
 }) {
   const navigate = useNavigate()
   const sw = getSwatch(folder.color)
   const noteCount = folder.notes.length
-  const menuRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!menuOpen) return
-    const onDocClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onMenuClose()
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onMenuClose()
-    }
-    document.addEventListener('mousedown', onDocClick)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDocClick)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [menuOpen, onMenuClose])
 
   const open = () => navigate(`/folders/${folder.id}`)
 
   const menu = (
-    <div className="relative" ref={menuRef}>
-      <button
-        type="button"
-        aria-label={`${folder.name} options`}
-        aria-haspopup="menu"
-        aria-expanded={menuOpen}
-        onClick={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          onMenuToggle()
-        }}
-        className={`grid h-9 w-9 place-items-center rounded-xl transition-colors ${
-          menuOpen ? 'bg-white/[0.22] text-white' : 'text-white/85 hover:bg-white/[0.18] hover:text-white'
-        }`}
-      >
-        <MoreIcon size={18} />
-      </button>
-      {menuOpen && (
-        <div
-          role="menu"
-          onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-[calc(100%+8px)] right-0 z-50 flex min-w-[156px] flex-col gap-0.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] p-1.5 text-[var(--text-primary)] shadow-[0_10px_24px_-8px_rgba(27,19,38,0.18),0_24px_60px_-20px_rgba(27,19,38,0.30)] animate-modal-in"
-        >
-          <button
-            type="button"
-            role="menuitem"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEdit() }}
-            className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[13px] font-semibold transition-colors hover:bg-[#7758A3]/[0.08]"
-          >
-            <span className="grid h-[22px] w-[22px] place-items-center rounded-md bg-[#7758A3]/10 text-[#8B5CF6]">
-              <EditIcon size={14} />
-            </span>
-            Edit
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete() }}
-            className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[13px] font-semibold text-[#B91C1C] transition-colors hover:bg-[#DC2626]/[0.08]"
-          >
-            <span className="grid h-[22px] w-[22px] place-items-center rounded-md bg-[#DC2626]/10 text-[#DC2626]">
-              <TrashIcon size={14} />
-            </span>
-            Delete
-          </button>
-        </div>
-      )}
-    </div>
+    <CardActionMenu
+      ariaLabel={`${folder.name} options`}
+      open={menuOpen}
+      onToggle={onMenuToggle}
+      onClose={onMenuClose}
+      triggerClass={`grid h-9 w-9 place-items-center rounded-xl transition-colors ${
+        menuOpen
+          ? 'bg-[var(--accent-tint)] text-[var(--text-primary)]'
+          : 'text-[var(--text-secondary)] hover:bg-[var(--accent-tint)] hover:text-[var(--text-primary)]'
+      }`}
+      items={[
+        {
+          key: 'pin',
+          label: folder.pinned ? 'Unpin' : 'Pin to top',
+          icon: folder.pinned ? <PinOff size={14} /> : <Pin size={14} />,
+          chipClass: 'bg-[#4F46E5]/10 text-[#4F46E5]',
+          onSelect: onTogglePin,
+        },
+        {
+          key: 'archive',
+          label: folder.archived ? 'Unarchive' : 'Archive',
+          icon: folder.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />,
+          chipClass: 'bg-[#0EA5E9]/10 text-[#0EA5E9]',
+          onSelect: onToggleArchive,
+        },
+        {
+          key: 'edit',
+          label: 'Edit',
+          icon: <EditIcon size={14} />,
+          chipClass: 'bg-[#4F46E5]/10 text-[#4F46E5]',
+          onSelect: onEdit,
+        },
+        {
+          key: 'delete',
+          label: 'Delete',
+          icon: <TrashIcon size={14} />,
+          chipClass: 'bg-[#DC2626]/10 text-[#DC2626]',
+          danger: true,
+          onSelect: onDelete,
+        },
+      ]}
+    >
+      <MoreIcon size={18} />
+    </CardActionMenu>
   )
 
   if (view === 'list') {
     return (
       <article
         onClick={open}
-        className="relative flex min-h-[76px] w-full cursor-pointer items-center gap-[18px] rounded-[18px] px-5 py-3.5 text-white"
-        style={{ background: sw.back }}
+        className="relative flex min-h-[72px] w-full cursor-pointer items-center gap-4 overflow-hidden rounded-[18px] border border-[var(--border-subtle)] bg-[var(--surface)] px-5 py-3.5 shadow-[0_1px_0_rgba(27,28,40,0.04),0_10px_24px_-14px_rgba(27,28,40,0.12)] transition-transform hover:-translate-y-px"
       >
-        <h3 className="m-0 truncate text-[18px] font-extrabold tracking-[-0.02em]" style={{ fontFamily: bricolage }}>
+        {/* folder-color spine + glyph chip — a calm accent, not a full color wash */}
+        <span className="absolute bottom-0 left-0 top-0 w-[5px]" style={{ background: sw.swatch }} />
+        <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl" style={{ background: sw.tint }}>
+          <FolderGlyph size={20} color={sw.glyph} />
+        </span>
+        <h3 className="m-0 truncate text-[18px] font-extrabold tracking-[-0.02em] text-[var(--text-primary)]" style={{ fontFamily: bricolage }}>
           {folder.name}
         </h3>
-        <p className="m-0 hidden max-w-[380px] flex-1 truncate text-[13px] font-semibold text-white/85 sm:block">
+        <p className="m-0 hidden max-w-[380px] flex-1 truncate text-[13px] font-medium text-[var(--text-secondary)] sm:block">
           {folder.purpose}
         </p>
-        <p className="m-0 ml-auto whitespace-nowrap text-[13px] font-bold text-white/90">
+        <p className="m-0 ml-auto whitespace-nowrap text-[13px] font-bold" style={{ color: sw.glyph }}>
           {noteCount} {noteCount === 1 ? 'note' : 'notes'}
         </p>
         {menu}
@@ -636,83 +679,122 @@ function FolderCard({
     )
   }
 
+  // Muted pastels: the vibrant swatch blended toward white so the folder reads as a soft,
+  // easy-on-the-eye version of its color instead of a flamboyant fully-saturated block. The
+  // front flap sits a touch deeper than the back for a subtle paper-in-folder gradient.
+  const flapBack = `linear-gradient(180deg, ${mixHex(sw.swatch, '#FFFFFF', 0.74)}, ${mixHex(sw.swatch, '#FFFFFF', 0.56)})`
+  const flapFront = `linear-gradient(180deg, ${mixHex(sw.swatch, '#FFFFFF', 0.52)}, ${mixHex(sw.swatch, '#FFFFFF', 0.34)})`
+  // Left-tabbed folder silhouette for the front flap: a raised tab on the left steps down
+  // to the lower body, leaving the "paper" peeking out along the top-right.
+  const tabClip = 'polygon(0 24%, 38% 24%, 46% 44%, 100% 44%, 100% 100%, 0 100%)'
+
   return (
     <article
       onClick={open}
-      className="folder-card-3d group relative h-[220px] w-full cursor-pointer overflow-hidden rounded-[24px] shadow-[0_1px_3px_rgba(27,19,38,0.06)]"
+      className="folder-card-3d group relative h-[210px] w-full cursor-pointer overflow-hidden rounded-[20px] shadow-[0_1px_3px_rgba(27,28,40,0.06)]"
       style={{ ['--fhalo' as string]: sw.halo } as React.CSSProperties}
     >
-      {/* 1. back gradient */}
-      <div className="absolute inset-x-0 bottom-0 h-[88%] rounded-[24px]" style={{ background: sw.back }} />
+      {/* back flap — the whole folder body behind the paper */}
+      <div className="absolute inset-0 rounded-[20px]" style={{ background: flapBack }} />
 
-      {/* 2. white note peeking out */}
-      <div className="folder-note-peek absolute left-[22px] right-[22px] top-4 z-10 flex h-[86px] flex-col gap-2 rounded-t-2xl rounded-b-lg border border-white/80 bg-[var(--folder-peek-bg)] p-4 shadow-[0_20px_25px_-5px_rgba(15,23,42,0.08),0_8px_10px_-6px_rgba(15,23,42,0.05)]">
-        <span className="h-[7px] w-2/3 rounded-full bg-slate-200/70" />
-        <span className="h-[7px] w-full rounded-full bg-slate-200/70" />
-        <span className="h-[7px] w-4/5 rounded-full bg-slate-200/70" />
+      {/* white "paper" peeking out of the top, with a few faint text lines */}
+      <div className="folder-note-peek absolute left-4 right-4 top-4 h-[104px] overflow-hidden rounded-[10px] bg-[var(--folder-peek-bg)] shadow-[0_2px_10px_-5px_rgba(27,19,38,0.28)]">
+        <div className="flex flex-col gap-2 p-3.5">
+          <span className="h-[7px] w-[64%] rounded-full" style={{ background: sw.tint }} />
+          <span className="h-[7px] w-[82%] rounded-full" style={{ background: sw.tint }} />
+          <span className="h-[7px] w-[46%] rounded-full" style={{ background: sw.tint }} />
+        </div>
       </div>
 
-      {/* 3. front gradient with tab notch */}
-      <div
-        className="absolute inset-x-0 bottom-0 z-20 h-[66%] overflow-hidden rounded-b-[24px] shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]"
-        style={{ background: sw.front, clipPath: 'polygon(0 0, 40% 0, 55% 16%, 100% 16%, 100% 100%, 0 100%)' }}
-      />
+      {/* front flap — the tabbed folder face, drawn over the paper */}
+      <div className="absolute inset-0" style={{ background: flapFront, clipPath: tabClip }} />
 
-      {/* 4. content */}
-      <div className="absolute inset-0 z-30 flex flex-col justify-end p-5 text-white">
-        <h3 className="m-0 truncate text-[22px] font-extrabold leading-[1.1] tracking-[-0.025em]" style={{ fontFamily: bricolage }}>
+      {/* pinned / archived corner badges */}
+      {(folder.pinned || folder.archived) && (
+        <div className="absolute right-3.5 top-3.5 z-[4] flex items-center gap-1.5">
+          {folder.archived && (
+            <span className="grid h-[26px] w-[26px] place-items-center rounded-full bg-[#0EA5E9]/12 text-[#0EA5E9]" title="Archived">
+              <Archive size={13} />
+            </span>
+          )}
+          {folder.pinned && (
+            <span className="grid h-[26px] w-[26px] place-items-center rounded-full text-white shadow-[0_6px_16px_-6px_rgba(79,70,229,0.6)]" style={{ background: sw.swatch }} title="Pinned">
+              <Pin size={13} fill="currentColor" />
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* folder label — deep ink of the same hue so it stays legible on the pastel face */}
+      <div className="absolute inset-x-0 bottom-0 z-[3] p-5 pr-14" style={{ color: sw.glyph }}>
+        <h3 className="m-0 truncate text-[20px] font-extrabold leading-[1.15] tracking-[-0.025em]" style={{ fontFamily: bricolage }}>
           {folder.name}
         </h3>
-        <p className="m-0 mt-1 truncate text-[13px] font-semibold text-white/85">{folder.purpose}</p>
-        <p className="m-0 mt-3 text-[13px] font-bold text-white/90">
+        {folder.purpose && (
+          <p className="m-0 mt-0.5 truncate text-[13px] font-medium" style={{ opacity: 0.72 }}>{folder.purpose}</p>
+        )}
+        <p className="m-0 mt-2 text-[12.5px] font-bold" style={{ opacity: 0.9 }}>
           {noteCount} {noteCount === 1 ? 'note' : 'notes'}
         </p>
       </div>
 
       {/* more menu — bottom-right */}
-      <div className="absolute bottom-4 right-4 z-40">{menu}</div>
+      <div className="absolute bottom-4 right-4 z-[4]">{menu}</div>
     </article>
   )
 }
 
-/* ---------- new folder tile ---------- */
-function NewFolderTile({ view, onClick }: { view: ViewMode; onClick: () => void }) {
-  if (view === 'list') {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        className="flex w-full items-center gap-3.5 rounded-[18px] border-[1.5px] border-dashed border-[#7758A3]/30 px-5 py-3.5 text-left transition-colors hover:border-[#8B5CF6]"
-        style={{ background: 'rgba(255,255,255,0.5)' }}
-      >
-        <span className="grid h-[38px] w-[38px] place-items-center rounded-full bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)]">
-          <PlusIcon size={18} />
-        </span>
-        <span className="text-[18px] font-extrabold tracking-[-0.02em]" style={{ fontFamily: bricolage }}>
-          New folder
-        </span>
-        <span className="text-xs text-[var(--text-secondary)]">Group notes by topic, project, or vibe</span>
-      </button>
-    )
+/* ---------- empty states for the folder filters ----------
+   Each filter tab gets its own message; only the "no folders at all" case offers a
+   create shortcut (every other case already has folders, just none under this filter). */
+function FoldersEmpty({ filter, query, onCreate }: { filter: Filter; query: string; onCreate: () => void }) {
+  const searching = Boolean(query.trim())
+
+  let Icon: React.ElementType = FolderGlyph
+  let title = 'No folders yet'
+  let body: React.ReactNode = 'Create your first folder to start organizing your notes.'
+  let showCreate = false
+
+  if (searching && (filter === 'All' || filter === 'Recent' || filter === 'Pinned' || filter === 'Archive')) {
+    title = 'No matches'
+    body = <>No folders match "<b className="text-[var(--text-primary)]">{query}</b>". Try a different search.</>
+  } else if (filter === 'Shared') {
+    Icon = Users
+    title = 'Sharing is coming soon'
+    body = 'Folders you share with teammates will show up here.'
+  } else if (filter === 'Pinned') {
+    Icon = Pin
+    title = 'No pinned folders'
+    body = 'Pin a folder from its ••• menu to keep it at your fingertips.'
+  } else if (filter === 'Recent') {
+    Icon = RotateCcw
+    title = 'Nothing recent'
+    body = 'Folders you’ve worked in over the last 14 days will appear here.'
+  } else if (filter === 'Archive') {
+    Icon = Archive
+    title = 'Archive is empty'
+    body = 'Archive a folder from its ••• menu to tuck it away without deleting it.'
+  } else {
+    showCreate = true
   }
 
   return (
-    <button type="button" onClick={onClick} className="group h-[220px] w-full text-left">
-      <div
-        className="flex h-full flex-col items-center justify-center gap-2 rounded-[24px] border-[1.5px] border-dashed border-[#7758A3]/30 p-4 text-center transition-colors group-hover:border-[#8B5CF6]"
-        style={{ background: 'radial-gradient(circle at top left, rgba(119,88,163,0.06), transparent 50%), rgba(255,255,255,0.5)' }}
-      >
-        <span className="mb-1 grid h-12 w-12 place-items-center rounded-full bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] shadow-[0_10px_22px_-10px_rgba(27,19,38,0.5)]">
-          <PlusIcon size={22} />
-        </span>
-        <span className="text-[20px] font-extrabold tracking-[-0.02em] text-[var(--text-primary)]" style={{ fontFamily: bricolage }}>
-          New folder
-        </span>
-        <span className="max-w-[200px] text-xs leading-snug text-[var(--text-secondary)]">
-          Group notes by topic, project, or vibe
-        </span>
+    <div className="relative z-[2] py-[60px] text-center text-[var(--text-secondary)]">
+      <div className="mx-auto mb-3 grid h-16 w-16 place-items-center rounded-[18px] border border-[var(--border-subtle)] bg-[var(--surface)]">
+        <Icon size={28} color="#4F46E5" />
       </div>
-    </button>
+      <p className="text-[17px] font-extrabold tracking-[-0.02em] text-[var(--text-primary)]" style={{ fontFamily: bricolage }}>{title}</p>
+      <p className="mx-auto mt-1 max-w-[420px]">{body}</p>
+      {showCreate && (
+        <button
+          type="button"
+          onClick={onCreate}
+          className="mt-5 inline-flex items-center gap-2 rounded-full bg-[var(--btn-primary-bg)] px-5 py-3 text-sm font-semibold text-[var(--btn-primary-text)] shadow-[0_14px_30px_-16px_rgba(27,19,38,0.5)] transition-transform hover:-translate-y-px"
+        >
+          <PlusIcon size={14} /> New folder
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -822,7 +904,7 @@ function TrashView() {
   const heading = (title: string, sub: string) => (
     <div className="relative z-[3] mb-6">
       <h1 className="m-0 font-extrabold leading-[1.05] tracking-[-0.035em]" style={{ fontFamily: bricolage, fontSize: 'clamp(36px, 5vw, 64px)' }}>
-        {title}<span className="text-[#F99A00]">.</span>
+        {title}<span className="text-[#4F46E5]">.</span>
       </h1>
       <p className="mt-3 text-sm text-[var(--text-secondary)]">{sub}</p>
     </div>
@@ -863,7 +945,7 @@ function TrashView() {
           </span>
           {selected.folderDeleted && (
             <div className="ml-auto flex gap-2">
-              <button onClick={doRestoreFolder} disabled={busy} className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] px-3.5 py-2 text-[13px] font-semibold text-[var(--text-primary)] transition-colors hover:bg-[#7758A3]/[0.06] disabled:opacity-50">
+              <button onClick={doRestoreFolder} disabled={busy} className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] px-3.5 py-2 text-[13px] font-semibold text-[var(--text-primary)] transition-colors hover:bg-[#4F46E5]/[0.06] disabled:opacity-50">
                 <RotateCcw className="h-4 w-4" /> Restore folder
               </button>
               <button onClick={doPurgeFolder} disabled={busy} className="inline-flex items-center gap-1.5 rounded-xl bg-[#DC2626]/10 px-3.5 py-2 text-[13px] font-semibold text-[var(--danger-text)] transition-colors hover:bg-[#DC2626]/15 disabled:opacity-50">
@@ -912,11 +994,11 @@ function TrashView() {
       )}
       {loading ? (
         <div className="relative z-[2] flex items-center justify-center gap-3 py-20 text-[var(--text-secondary)]">
-          <span className="h-5 w-5 animate-spin rounded-full border-[2.5px] border-[#7758A3]/25 border-t-[#7758A3]" /> Loading Trash…
+          <span className="h-5 w-5 animate-spin rounded-full border-[2.5px] border-[#4F46E5]/25 border-t-[#4F46E5]" /> Loading Trash…
         </div>
       ) : items.length === 0 ? (
         <div className="relative z-[2] py-[60px] text-center text-[var(--text-secondary)]">
-          <div className="mx-auto mb-3 grid h-16 w-16 place-items-center rounded-[18px] border border-[var(--border-subtle)] bg-[var(--surface)]"><Trash2 className="h-7 w-7 text-[#8B5CF6]" /></div>
+          <div className="mx-auto mb-3 grid h-16 w-16 place-items-center rounded-[18px] border border-[var(--border-subtle)] bg-[var(--surface)]"><Trash2 className="h-7 w-7 text-[#4F46E5]" /></div>
           <p>Trash is empty. Deleted folders and notes will show up here.</p>
         </div>
       ) : (

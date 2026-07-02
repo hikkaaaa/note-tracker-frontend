@@ -43,6 +43,12 @@ export interface LocalNote {
   title: string
   purpose?: string
   created_at: string
+  // ISO timestamp of the last edit (title/purpose/flags or any block change). Empty when
+  // the backend has no value. Drives the folder-detail "Recent" filter.
+  updated_at: string
+  // Two independent organizational marks (see backend Note model).
+  starred: boolean
+  pinned: boolean
   // Notes have no color of their own — they always inherit their parent folder's color.
 }
 
@@ -51,6 +57,11 @@ export interface LocalFolder {
   name: string
   purpose: string
   color: FolderColor
+  pinned: boolean
+  archived: boolean
+  // Newest activity across the folder + its notes (ISO). Drives the dashboard "Recent"
+  // filter. Empty when unknown.
+  lastActivity: string
   notes: LocalNote[]
 }
 

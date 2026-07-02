@@ -60,6 +60,28 @@ def _migrate_user_profile():
             conn.execute(text("ALTER TABLE users ADD COLUMN avatar TEXT NOT NULL DEFAULT ''"))
 
 
+def _migrate_org_fields():
+    """Add the pin/archive flags and activity timestamps to pre-existing folders/notes.
+    Booleans get a NOT NULL DEFAULT 0 (off). Timestamps are added nullable and backfilled to
+    'now' so existing rows have a sane last-activity instead of sorting as epoch-old."""
+    folder_cols = [c["name"] for c in inspect(engine).get_columns("folders")]
+    note_cols = [c["name"] for c in inspect(engine).get_columns("notes")]
+    with engine.begin() as conn:
+        for col in ("pinned", "archived"):
+            if col not in folder_cols:
+                conn.execute(text(f"ALTER TABLE folders ADD COLUMN {col} BOOLEAN NOT NULL DEFAULT 0"))
+        if "updated_at" not in folder_cols:
+            conn.execute(text("ALTER TABLE folders ADD COLUMN updated_at DATETIME"))
+            conn.execute(text("UPDATE folders SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL"))
+        for col in ("starred", "pinned"):
+            if col not in note_cols:
+                conn.execute(text(f"ALTER TABLE notes ADD COLUMN {col} BOOLEAN NOT NULL DEFAULT 0"))
+        for col in ("created_at", "updated_at"):
+            if col not in note_cols:
+                conn.execute(text(f"ALTER TABLE notes ADD COLUMN {col} DATETIME"))
+                conn.execute(text(f"UPDATE notes SET {col} = CURRENT_TIMESTAMP WHERE {col} IS NULL"))
+
+
 # These one-off ALTERs evolve a pre-existing *SQLite* file in place. A fresh database
 # (including the PostgreSQL target) gets the complete schema from create_all / Alembic,
 # so they only run on SQLite.
@@ -68,6 +90,7 @@ if IS_SQLITE:
     _migrate_folder_user_id()
     _migrate_soft_delete()
     _migrate_user_profile()
+    _migrate_org_fields()
 
 app = FastAPI(title="Note Tracker API")
 
@@ -164,10 +187,17 @@ def _folder_out(folder: models.Folder) -> schemas.FolderResponse:
     """Serialize a folder exposing only its LIVE notes. Builds fresh pydantic objects
     instead of mutating folder.notes — that collection has delete-orphan cascade, so
     reassigning it would hard-delete the filtered-out notes on the next flush."""
+    live_notes = [n for n in folder.notes if n.deleted_at is None]
+    # Newest activity = the folder's own updated_at vs. its live notes' updated_at. Powers
+    # the dashboard "Recent" filter ("folders worked with in the last N days").
+    stamps = [t for t in ([folder.updated_at] + [n.updated_at for n in live_notes]) if t is not None]
+    last_activity = max(stamps) if stamps else None
     return schemas.FolderResponse(
         id=folder.id, name=folder.name, purpose=folder.purpose, color=folder.color,
         user_id=folder.user_id,
-        notes=[schemas.NoteResponse.model_validate(n) for n in folder.notes if n.deleted_at is None],
+        pinned=bool(folder.pinned), archived=bool(folder.archived),
+        last_activity=last_activity,
+        notes=[schemas.NoteResponse.model_validate(n) for n in live_notes],
     )
 
 
@@ -308,7 +338,7 @@ def create_folder(
     db.add(db_folder)
     db.commit()
     db.refresh(db_folder)
-    return db_folder
+    return _folder_out(db_folder)
 
 
 @app.get("/folders/", response_model=List[schemas.FolderResponse])
@@ -346,12 +376,12 @@ def update_folder(
 ):
     db_folder = _owned_folder(folder_id, user, db)
     data = folder_update.model_dump(exclude_unset=True)
-    for field in ("name", "purpose", "color"):
+    for field in ("name", "purpose", "color", "pinned", "archived"):
         if field in data:
             setattr(db_folder, field, data[field])
     db.commit()
     db.refresh(db_folder)
-    return db_folder
+    return _folder_out(db_folder)
 
 
 @app.delete("/folders/{folder_id}")
@@ -408,7 +438,7 @@ def update_note(
 ):
     db_note = _owned_note(note_id, user, db)
     data = note_update.model_dump(exclude_unset=True)
-    for field in ("title", "purpose"):
+    for field in ("title", "purpose", "starred", "pinned"):
         if field in data:
             setattr(db_note, field, data[field])
     db.commit()
@@ -536,9 +566,10 @@ def create_section(
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
 ):
-    _owned_note(note_id, user, db)  # 404s if the note isn't this user's
+    note = _owned_note(note_id, user, db)  # 404s if the note isn't this user's
     db_section = models.Section(note_id=note_id, type=section.type, content=section.content, title=section.title)
     db.add(db_section)
+    note.updated_at = _utcnow()  # editing a block counts as note activity (drives "Recent")
     db.commit()
     db.refresh(db_section)
     return db_section
@@ -559,6 +590,8 @@ def update_section(
         db_section.content = data["content"]
     if "title" in data:
         db_section.title = data["title"]
+    if db_section.note is not None:
+        db_section.note.updated_at = _utcnow()  # block edit → note activity (drives "Recent")
     db.commit()
     db.refresh(db_section)
     return db_section
@@ -571,7 +604,10 @@ def delete_section(
     user: models.User = Depends(get_current_user),
 ):
     db_section = _owned_section(section_id, user, db)
+    note = db_section.note
     db.delete(db_section)
+    if note is not None:
+        note.updated_at = _utcnow()  # removing a block → note activity (drives "Recent")
     db.commit()
     return {"ok": True}
 

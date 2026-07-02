@@ -9,9 +9,9 @@
 
   /* ---- Theme tokens ----
      The page shells read these vars so switching the data-theme attribute (see
-     lib/theme.tsx) recolors the whole app. Light/pink mirror the original
-     hardcoded palette so nothing regresses; dark is a designed near-black
-     palette (soft canvas + raised surfaces) rather than pure #000.
+     lib/theme.tsx) recolors the whole app. Light is a cool slate-white canvas
+     with white surfaces; dark is a designed midnight palette (soft canvas +
+     raised surfaces) rather than pure #000. Indigo is the single brand accent.
 
        --bg-primary          page canvas
        --surface             card / panel background
@@ -25,87 +25,75 @@
        --danger-text/-border/-bg  destructive (remove / log out) controls */
   :root,
   [data-theme='light'] {
-    --bg-primary: #FBF7F2;
+    --bg-primary: #F4F5FB;
     --surface: #FFFFFF;
-    --surface-input: #FBF7F2;
+    --surface-input: #F4F5FB;
     --surface-input-focus: #FFFFFF;
-    --border-subtle: rgba(27, 19, 38, 0.08);
-    --text-primary: #1B1326;
-    --text-secondary: #6E5F7B;
-    --grid-line: rgba(27, 19, 38, 0.08);
-    --btn-primary-bg: #1B1326;
-    --btn-primary-text: #FBF7F2;
+    --border-subtle: rgba(21, 22, 31, 0.08);
+    --text-primary: #1B1C28;
+    --text-secondary: #6B6F80;
+    --grid-line: rgba(21, 22, 31, 0.05);
+    /* Indigo is the single brand accent (replaces the old orange/violet mix).
+       Primary buttons now carry the accent itself, matching the indigo pills. */
+    --accent: #4F46E5;
+    --accent-strong: #4338CA;
+    --accent-soft: #C7D2FE;
+    --accent-tint: rgba(79, 70, 229, 0.12);
+    --accent-gradient: linear-gradient(120deg, #6366F1, #4F46E5, #4338CA);
+    /* Indigo-500 for filled buttons — bold enough to read as the brand accent, a touch softer
+       than the old punchy #4F46E5, and the same hue as the indigo folder swatch. */
+    --btn-primary-bg: #6366F1;
+    --btn-primary-text: #FFFFFF;
     --danger-text: #B91C1C;
     --danger-border: rgba(220, 38, 38, 0.30);
     --danger-bg: rgba(220, 38, 38, 0.05);
     --table-cell-bg: #FFFFFF;
-    --table-header-bg: #F1F5F9;
-    --table-border: #94A3B8;
-    --scrollbar-thumb: #CBD5E1;
-    --scrollbar-thumb-hover: #94A3B8;
+    --table-header-bg: #F1F2F8;
+    --table-border: #B4B8CC;
+    --scrollbar-thumb: #CBD0E0;
+    --scrollbar-thumb-hover: #9AA0B8;
     --folder-peek-bg: #FFFFFF;
     --note-card-footer: #FFFFFF;
-    --note-ink-strong: rgba(27, 19, 38, 0.14);
-    --note-ink-soft: rgba(27, 19, 38, 0.08);
-    --note-texture: rgba(27, 19, 38, 0.06);
-    --note-fold: rgba(27, 19, 38, 0.06);
+    --note-ink-strong: rgba(27, 28, 40, 0.14);
+    --note-ink-soft: rgba(27, 28, 40, 0.08);
+    --note-texture: rgba(27, 28, 40, 0.06);
+    --note-fold: rgba(27, 28, 40, 0.06);
   }
 
   [data-theme='dark'] {
-    --bg-primary: #0E0F13;
-    --surface: #191A20;
-    --surface-input: #212229;
-    --surface-input-focus: #292A33;
-    --border-subtle: rgba(255, 255, 255, 0.09);
-    --text-primary: #F4F1EC;
-    --text-secondary: #9D96A8;
-    --grid-line: rgba(255, 255, 255, 0.05);
-    --btn-primary-bg: #F4F1EC;
-    --btn-primary-text: #1B1326;
+    --bg-primary: #15161F;
+    --surface: #1E1F2B;
+    --surface-input: #262734;
+    --surface-input-focus: #2E2F3E;
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --text-primary: #FFFFFF;
+    --text-secondary: #9A9DB0;
+    --grid-line: rgba(255, 255, 255, 0.04);
+    /* Lighter indigo on dark so accents keep contrast against the midnight canvas. */
+    --accent: #818CF8;
+    --accent-strong: #6366F1;
+    --accent-soft: #4338CA;
+    --accent-tint: rgba(129, 140, 248, 0.16);
+    --accent-gradient: linear-gradient(120deg, #A5B4FC, #818CF8, #6366F1);
+    --btn-primary-bg: #6366F1;
+    --btn-primary-text: #FFFFFF;
     --danger-text: #F87171;
     --danger-border: rgba(248, 113, 113, 0.32);
     --danger-bg: rgba(248, 113, 113, 0.08);
-    --table-cell-bg: #1C1D24;
-    --table-header-bg: #23242C;
+    --table-cell-bg: #21222E;
+    --table-header-bg: #282936;
     --table-border: rgba(255, 255, 255, 0.16);
     --scrollbar-thumb: rgba(255, 255, 255, 0.16);
     --scrollbar-thumb-hover: rgba(255, 255, 255, 0.28);
     /* "Paper" surfaces poking out of folder/note cards: keep folder peek a soft
        off-white (paper in a colored folder reads light), give note cards a raised
        footer + light ink so titles/previews stay legible on the dark card. */
-    --folder-peek-bg: #ECEAE4;
-    --note-card-footer: #1F2027;
+    --folder-peek-bg: #E9EAF0;
+    --note-card-footer: #23242F;
     --note-ink-strong: rgba(255, 255, 255, 0.16);
     --note-ink-soft: rgba(255, 255, 255, 0.08);
     --note-texture: rgba(255, 255, 255, 0.05);
     --note-fold: rgba(255, 255, 255, 0.07);
-  }
-
-  [data-theme='pink'] {
-    --bg-primary: #FBE3EE;
-    --surface: #FFFFFF;
-    --surface-input: #FFF3F8;
-    --surface-input-focus: #FFFFFF;
-    --border-subtle: rgba(27, 19, 38, 0.08);
-    --text-primary: #1B1326;
-    --text-secondary: #6E5F7B;
-    --grid-line: rgba(27, 19, 38, 0.08);
-    --btn-primary-bg: #1B1326;
-    --btn-primary-text: #FBF7F2;
-    --danger-text: #B91C1C;
-    --danger-border: rgba(220, 38, 38, 0.30);
-    --danger-bg: rgba(220, 38, 38, 0.05);
-    --table-cell-bg: #FFFFFF;
-    --table-header-bg: #FFF3F8;
-    --table-border: #94A3B8;
-    --scrollbar-thumb: #CBD5E1;
-    --scrollbar-thumb-hover: #94A3B8;
-    --folder-peek-bg: #FFFFFF;
-    --note-card-footer: #FFFFFF;
-    --note-ink-strong: rgba(27, 19, 38, 0.14);
-    --note-ink-soft: rgba(27, 19, 38, 0.08);
-    --note-texture: rgba(27, 19, 38, 0.06);
-    --note-fold: rgba(27, 19, 38, 0.06);
   }
 
   html {
@@ -202,15 +190,15 @@
 }
 .bloom-field:focus {
   background: #ffffff;
-  border-color: var(--accent, #8b5cf6);
-  box-shadow: 0 0 0 4px var(--accent-tint, rgba(139, 92, 246, 0.15));
+  border-color: var(--accent, #4F46E5);
+  box-shadow: 0 0 0 4px var(--accent-tint, rgba(79, 70, 229, 0.15));
 }
 .bloom-searchbox {
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .bloom-searchbox:focus-within {
-  border-color: var(--accent, #8b5cf6);
-  box-shadow: 0 0 0 4px var(--accent-tint, rgba(139, 92, 246, 0.15));
+  border-color: var(--accent, #4F46E5);
+  box-shadow: 0 0 0 4px var(--accent-tint, rgba(79, 70, 229, 0.15));
 }
 
 /* accent-tinted hovers on the notes page (back button + new-note tile) */
@@ -219,15 +207,15 @@
 }
 .bloom-backbtn:hover {
   transform: translateX(-2px);
-  background: var(--accent-tint, rgba(139, 92, 246, 0.12));
+  background: var(--accent-tint, rgba(79, 70, 229, 0.12));
 }
 .bloom-new-note-tile {
   transition: background 0.2s, border-color 0.2s, transform 0.2s;
 }
 .bloom-new-note-tile:hover {
   transform: translateY(-4px);
-  background: var(--accent-tint, rgba(139, 92, 246, 0.12));
-  border-color: var(--accent, #8b5cf6);
+  background: var(--accent-tint, rgba(79, 70, 229, 0.12));
+  border-color: var(--accent, #4F46E5);
 }
 
 /* Note editor — block box + drag-to-add dock card hovers (accent-tinted) */
@@ -243,8 +231,8 @@
 }
 .note-dock-card:hover {
   transform: translateY(-2px);
-  border-color: var(--card-accent, #8b5cf6);
-  box-shadow: 0 12px 24px -16px var(--card-accent, #8b5cf6);
+  border-color: var(--card-accent, #4F46E5);
+  box-shadow: 0 12px 24px -16px var(--card-accent, #4F46E5);
 }
 .note-dock-card:active {
   transform: translateY(0) scale(0.99);
@@ -253,7 +241,7 @@
   transition: background 0.15s, transform 0.15s;
 }
 .note-ghost-btn:hover {
-  background: var(--accent-tint, rgba(139, 92, 246, 0.12));
+  background: var(--accent-tint, rgba(79, 70, 229, 0.12));
   transform: translateY(-1px);
 }
 

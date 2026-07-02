@@ -16,3 +16,17 @@
 2026-06-23 13:15:03 pruned: /Users/hixie/note-tracker/backend/backups/note_tracker.pre-recovery-20260607-185931.db
 2026-06-24 13:00:05 OK: wrote /Users/hixie/note-tracker/backend/backups/note_tracker.20260624-130005.db (328K)
 2026-06-25 13:12:10 OK: wrote /Users/hixie/note-tracker/backend/backups/note_tracker.20260625-131210.db (336K)
+2026-06-26 13:00:05 OK: wrote /Users/hixie/note-tracker/backend/backups/note_tracker.20260626-130005.db (336K)
+2026-06-27 13:00:02 OK: wrote /Users/hixie/note-tracker/backend/backups/note_tracker.20260627-130002.db (336K)
+2026-06-27 13:00:02 pruned: /Users/hixie/note-tracker/backend/backups/note_tracker.20260612-005754.db
+2026-06-27 13:00:02 pruned: /Users/hixie/note-tracker/backend/backups/note_tracker.20260612-013046.db
+2026-06-27 13:00:02 pruned: /Users/hixie/note-tracker/backend/backups/note_tracker.20260612-005649.db
+2026-06-28 13:00:03 OK: wrote /Users/hixie/note-tracker/backend/backups/note_tracker.20260628-130003.db (336K)
+2026-06-28 13:00:03 pruned: /Users/hixie/note-tracker/backend/backups/note_tracker.20260613-130002.db
+2026-06-28 13:00:03 pruned: /Users/hixie/note-tracker/backend/backups/note_tracker.20260612-130342.db
+2026-06-29 13:02:43 OK: wrote /Users/hixie/note-tracker/backend/backups/note_tracker.20260629-130243.db (336K)
+2026-06-30 13:06:38 OK: wrote /Users/hixie/note-tracker/backend/backups/note_tracker.20260630-130638.db (336K)
+2026-06-30 13:06:38 pruned: /Users/hixie/note-tracker/backend/backups/note_tracker.20260615-130001.db
+2026-06-30 13:06:38 pruned: /Users/hixie/note-tracker/backend/backups/note_tracker.20260614-131219.db
+2026-07-01 13:00:45 OK: wrote /Users/hixie/note-tracker/backend/backups/note_tracker.20260701-130045.db (336K)
+2026-07-01 13:00:45 pruned: /Users/hixie/note-tracker/backend/backups/note_tracker.20260616-130005.db

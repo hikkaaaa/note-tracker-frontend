@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import { Star, Pin, PinOff } from 'lucide-react'
 import { CreateNoteModal } from '../components/CreateNoteModal'
 import type { FormState as NoteFormState, NoteInitial } from '../components/CreateNoteModal'
 import { DeleteNoteModal } from '../components/DeleteNoteModal'
@@ -64,10 +65,19 @@ const TrashIcon = ({ size = 14 }: { size?: number }) => (
 )
 
 /* ---------- helpers ---------- */
+// The backend sends naive UTC timestamps (no zone suffix). Tag them as UTC before parsing,
+// otherwise the browser reads them as local time and dates/recency are off by the user's
+// timezone offset.
+function parseServerDate(iso?: string): number {
+  if (!iso) return NaN
+  const hasZone = /[zZ]|[+-]\d{2}:?\d{2}$/.test(iso)
+  return new Date(hasZone ? iso : `${iso}Z`).getTime()
+}
+
 function formatDate(iso?: string) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
+  const t = parseServerDate(iso)
+  if (Number.isNaN(t)) return ''
+  const d = new Date(t)
   return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`
 }
 
@@ -107,7 +117,20 @@ const PAPER_BG: Record<(typeof PAPERS)[number], { backgroundImage: string; backg
 }
 
 type SortMode = 'recent' | 'name'
-const FILTERS = ['All', 'Recent', 'Starred', 'Drafts']
+const FILTERS = ['All', 'Recent', 'Starred'] as const
+type NoteFilter = (typeof FILTERS)[number]
+
+// "Recent" = edited in the last 14 days (note or any of its blocks).
+const RECENT_WINDOW_MS = 14 * 24 * 60 * 60 * 1000
+function isRecentNote(iso: string, now: number): boolean {
+  if (!iso) return false
+  const t = parseServerDate(iso)
+  return !Number.isNaN(t) && now - t <= RECENT_WINDOW_MS
+}
+function noteTime(iso: string): number {
+  const t = parseServerDate(iso)
+  return Number.isNaN(t) ? 0 : t
+}
 
 export function FolderDetailPage() {
   const { folderId } = useParams()
@@ -115,6 +138,7 @@ export function FolderDetailPage() {
   const [folder, setFolder] = useState<LocalFolder | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [q, setQ] = useState('')
+  const [filter, setFilter] = useState<NoteFilter>('All')
   const [sortBy, setSortBy] = useState<SortMode>('recent')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingNote, setEditingNote] = useState<LocalNote | null>(null)
@@ -145,17 +169,36 @@ export function FolderDetailPage() {
   const accent = getSwatch(folder?.color ?? 'violet')
   const notes = useMemo(() => folder?.notes ?? [], [folder])
 
+  const matchesNoteFilter = useCallback((n: LocalNote, f: NoteFilter, now: number) => {
+    if (f === 'Starred') return n.starred
+    if (f === 'Recent') return isRecentNote(n.updated_at, now)
+    return true
+  }, [])
+
+  // Counts for the filter pills (search-independent).
+  const filterCounts = useMemo(() => {
+    const now = Date.now()
+    return Object.fromEntries(
+      FILTERS.map((f) => [f, notes.filter((n) => matchesNoteFilter(n, f, now)).length]),
+    ) as Record<NoteFilter, number>
+  }, [notes, matchesNoteFilter])
+
   const filtered = useMemo(() => {
-    let xs = notes
+    const now = Date.now()
+    let xs = notes.filter((n) => matchesNoteFilter(n, filter, now))
     const k = q.trim().toLowerCase()
     if (k) {
       xs = xs.filter(
         (n) => n.title.toLowerCase().includes(k) || (n.purpose ?? '').toLowerCase().includes(k),
       )
     }
-    if (sortBy === 'name') xs = [...xs].sort((a, b) => a.title.localeCompare(b.title))
-    return xs
-  }, [notes, q, sortBy])
+    // Pinned notes always float to the top; within each group, sort by name or recency.
+    return [...xs].sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+      if (sortBy === 'name') return a.title.localeCompare(b.title)
+      return noteTime(b.updated_at) - noteTime(a.updated_at)
+    })
+  }, [notes, q, sortBy, filter, matchesNoteFilter])
 
   const openCreate = () => {
     setEditingNote(null)
@@ -187,6 +230,20 @@ export function FolderDetailPage() {
     }
   }
 
+  // Optimistically toggle a note flag (star / pin), rolling back if the write fails.
+  const patchNoteFlag = async (note: LocalNote, patch: { starred?: boolean; pinned?: boolean }) => {
+    setMenuOpenId(null)
+    const apply = (n: LocalNote) => (n.id === note.id ? { ...n, ...patch } : n)
+    setFolder((cur) => (cur ? { ...cur, notes: cur.notes.map(apply) } : cur))
+    try {
+      await updateNote(note.id, patch)
+    } catch {
+      setFolder((cur) => (cur ? { ...cur, notes: cur.notes.map((n) => (n.id === note.id ? note : n)) } : cur))
+    }
+  }
+  const handleToggleStar = (note: LocalNote) => patchNoteFlag(note, { starred: !note.starred })
+  const handleTogglePin = (note: LocalNote) => patchNoteFlag(note, { pinned: !note.pinned })
+
   const isEmpty = notes.length === 0
   const modalInitial: NoteInitial | null = editingNote
     ? { title: editingNote.title, purpose: editingNote.purpose }
@@ -195,9 +252,9 @@ export function FolderDetailPage() {
   if (loaded && !folder) {
     return (
       <div className="relative flex min-h-screen flex-col items-center justify-center gap-3 overflow-hidden" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)', fontFamily: geist }}>
-        <PageBackdrop />
+        <PageBackdrop cursor={false} />
         <p className="relative z-[1] text-lg font-semibold">Folder not found</p>
-        <Link to="/dashboard" className="relative z-[1] rounded-full bg-[var(--btn-primary-bg)] px-5 py-2.5 text-sm font-semibold text-[var(--btn-primary-text)]">
+        <Link to="/dashboard" className="bg-[var(--btn-primary-bg)] relative z-[1] rounded-full px-5 py-2.5 text-sm font-semibold text-[var(--btn-primary-text)]">
           Back to folders
         </Link>
       </div>
@@ -206,7 +263,7 @@ export function FolderDetailPage() {
 
   return (
     <div className="relative min-h-screen overflow-x-hidden" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)', fontFamily: geist }}>
-      <PageBackdrop />
+      <PageBackdrop cursor={false} />
       <div
         id="folder-detail-page"
         className="relative z-[1] mx-auto max-w-[1440px] px-5 pb-20 pt-4 sm:px-10 sm:pt-6"
@@ -231,39 +288,17 @@ export function FolderDetailPage() {
               {folder?.name ?? '…'}
             </span>
           </div>
-          <div className="ml-auto">
-            <button
-              type="button"
-              onClick={openCreate}
-              className="inline-flex items-center gap-2.5 rounded-full bg-[var(--btn-primary-bg)] py-2.5 pl-1.5 pr-5 text-sm font-semibold text-[var(--btn-primary-text)] shadow-[0_14px_30px_-16px_rgba(27,19,38,0.5)] transition-transform hover:-translate-y-px"
-            >
-              <span className="grid h-7 w-7 place-items-center rounded-full bg-[#F59E0B] text-[#1B1326]">
-                <PlusIcon size={13} />
-              </span>
-              New Note
-            </button>
-          </div>
         </header>
 
-        {/* hero header */}
-        <section className="relative z-[3] mb-7 grid grid-cols-1 items-end gap-8 lg:grid-cols-[1fr_auto]">
-          <div>
-            <h1 className="m-0 font-extrabold leading-[1.05] tracking-[-0.035em]" style={{ fontFamily: bricolage, fontSize: 'clamp(40px, 6vw, 78px)' }}>
-              Notes{' '}
-              <span
-                className="inline-block bg-clip-text text-transparent"
-                style={{ backgroundImage: `linear-gradient(120deg, ${accent.swatch}, #F99A00)` }}
-              >
-                .
-              </span>
-            </h1>
-            <p className="mt-4 text-sm tracking-[-0.005em] text-[var(--text-secondary)]">
-              <b className="font-semibold text-[var(--text-primary)]">{notes.length}</b> {notes.length === 1 ? 'note' : 'notes'}
-            </p>
-          </div>
+        {/* action bar — the big "Notes" title is gone; the search + New Note controls now
+            live in this space and stretch the full width of the page */}
+        <section className="relative z-[3] mb-7">
+          <p className="mb-3.5 text-sm tracking-[-0.005em] text-[var(--text-secondary)]">
+            <b className="font-semibold text-[var(--text-primary)]">{notes.length}</b> {notes.length === 1 ? 'note' : 'notes'}
+          </p>
 
-          <div className="flex items-end">
-            <div className="bloom-searchbox flex min-w-0 items-center gap-2.5 rounded-[14px] border-[1.5px] border-[var(--border-subtle)] bg-[var(--surface)] px-3.5 py-3 shadow-[0_10px_28px_-16px_rgba(27,19,38,0.18)] lg:min-w-[340px]">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="bloom-searchbox flex flex-1 items-center gap-2.5 rounded-[16px] border-[1.5px] border-[var(--border-subtle)] bg-[var(--surface)] px-4 py-3.5 shadow-[0_10px_28px_-16px_rgba(27,19,38,0.18)]">
               <span className="grid place-items-center text-[var(--text-secondary)]"><SearchIcon /></span>
               <input
                 id="note-search"
@@ -274,6 +309,17 @@ export function FolderDetailPage() {
                 className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--text-secondary)]"
               />
             </div>
+
+            <button
+              type="button"
+              onClick={openCreate}
+              className="bg-[var(--btn-primary-bg)] inline-flex shrink-0 items-center justify-center gap-2.5 rounded-full py-[14px] pl-2.5 pr-8 text-sm font-semibold text-[var(--btn-primary-text)] shadow-[0_14px_30px_-16px_rgba(27,19,38,0.5)] transition-transform hover:-translate-y-px"
+            >
+              <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-white/20 text-white">
+                <PlusIcon size={13} />
+              </span>
+              New Note
+            </button>
           </div>
         </section>
 
@@ -282,21 +328,23 @@ export function FolderDetailPage() {
           <div className="relative z-[3] mb-7 flex flex-col items-stretch justify-between gap-3 border-b border-dashed border-[var(--border-subtle)] pb-[18px] sm:flex-row sm:items-center sm:gap-[18px]">
             <div className="flex flex-wrap gap-1.5">
               {FILTERS.map((label) => {
-                const on = label === 'All'
+                const on = label === filter
                 return (
                   <button
                     key={label}
                     type="button"
+                    onClick={() => setFilter(label)}
                     className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[13px] font-medium transition-colors ${
                       on
                         ? 'border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-primary)] shadow-[0_6px_18px_-12px_rgba(27,19,38,0.18)]'
-                        : 'border-transparent text-[var(--text-secondary)] hover:bg-[#7758A3]/[0.06] hover:text-[var(--text-primary)]'
+                        : 'border-transparent text-[var(--text-secondary)] hover:bg-[#4F46E5]/[0.06] hover:text-[var(--text-primary)]'
                     }`}
                   >
+                    {label === 'Starred' && <Star size={12} />}
                     {label}
                     {on && (
                       <span className="rounded-full px-1.5 py-0.5 text-[11px]" style={{ background: accent.tint, color: accent.swatch }}>
-                        {notes.length}
+                        {filterCounts[label]}
                       </span>
                     )}
                   </button>
@@ -316,7 +364,7 @@ export function FolderDetailPage() {
 
         {isEmpty ? (
           <EmptyNotes accent={accent} onCreate={openCreate} />
-        ) : (
+        ) : filtered.length > 0 ? (
           <main className="relative z-[2] grid grid-cols-1 gap-[22px] sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
             {filtered.map((note, i) => (
               <NoteCard
@@ -330,29 +378,22 @@ export function FolderDetailPage() {
                 onOpen={() => navigate(`/notes/${note.id}`)}
                 onEdit={() => { setEditingNote(note); setIsModalOpen(true); setMenuOpenId(null) }}
                 onDelete={() => { setDeletingNote(note); setMenuOpenId(null) }}
+                onToggleStar={() => handleToggleStar(note)}
+                onTogglePin={() => handleTogglePin(note)}
               />
             ))}
-            <button
-              type="button"
-              onClick={openCreate}
-              className="bloom-new-note-tile flex h-[280px] flex-col items-center justify-center gap-1.5 rounded-[18px] border-[1.5px] border-dashed border-[#7758A3]/25 p-4 text-center"
-            >
-              <span className="mb-1 grid h-11 w-11 place-items-center rounded-full bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] shadow-[0_10px_22px_-10px_rgba(27,19,38,0.5)]">
-                <PlusIcon size={20} />
-              </span>
-              <span className="text-[18px] font-extrabold tracking-[-0.02em] text-[var(--text-primary)]" style={{ fontFamily: bricolage }}>
-                New note
-              </span>
-              <span className="text-xs text-[var(--text-secondary)]">Jot something down</span>
-            </button>
           </main>
-        )}
-
-        {!isEmpty && filtered.length === 0 && q.trim() && (
-          <div className="py-10 text-center text-[var(--text-secondary)]">
-            <p>
-              No notes match "<b className="text-[var(--text-primary)]">{q}</b>". Try a different search.
-            </p>
+        ) : (
+          <div className="py-12 text-center text-[var(--text-secondary)]">
+            {q.trim() ? (
+              <p>No notes match "<b className="text-[var(--text-primary)]">{q}</b>". Try a different search.</p>
+            ) : filter === 'Starred' ? (
+              <p>No starred notes yet. Tap the star on a note to keep it here.</p>
+            ) : filter === 'Recent' ? (
+              <p>Nothing edited in the last 14 days.</p>
+            ) : (
+              <p>No notes here yet.</p>
+            )}
           </div>
         )}
       </div>
@@ -392,6 +433,8 @@ function NoteCard({
   onOpen,
   onEdit,
   onDelete,
+  onToggleStar,
+  onTogglePin,
 }: {
   note: LocalNote
   folderColor: FolderColor
@@ -402,6 +445,8 @@ function NoteCard({
   onOpen: () => void
   onEdit: () => void
   onDelete: () => void
+  onToggleStar: () => void
+  onTogglePin: () => void
 }) {
   const sw = getSwatch(folderColor)
   const { paper, preview } = noteVisuals(note.id)
@@ -457,7 +502,11 @@ function NoteCard({
       <div className="relative z-[1] border-t border-[var(--border-subtle)] px-[22px] pb-[18px] pt-3.5" style={{ background: 'var(--note-card-footer)' }}>
         <div className="mb-2 flex items-center justify-between">
           <span className="text-[11px] uppercase tracking-[0.05em] text-[var(--text-secondary)]">
-            {formatDate(note.created_at) || 'Draft'}
+            {formatDate(note.created_at)}
+          </span>
+          <span className="flex items-center gap-1.5">
+            {note.pinned && <Pin size={13} fill="currentColor" style={{ color: sw.swatch }} />}
+            {note.starred && <Star size={13} fill="#F59E0B" color="#F59E0B" />}
           </span>
         </div>
         <h3 className="m-0 mb-1 truncate text-[20px] font-extrabold leading-[1.15] tracking-[-0.025em]" style={{ fontFamily: bricolage }}>
@@ -484,13 +533,35 @@ function NoteCard({
           <div
             role="menu"
             onClick={(e) => e.stopPropagation()}
-            className="absolute bottom-[calc(100%+6px)] right-0 z-50 flex min-w-[152px] flex-col gap-0.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] p-1.5 shadow-[0_10px_24px_-8px_rgba(27,19,38,0.18),0_24px_60px_-20px_rgba(27,19,38,0.30)] animate-modal-in"
+            className="absolute bottom-[calc(100%+6px)] right-0 z-50 flex min-w-[160px] flex-col gap-0.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] p-1.5 shadow-[0_10px_24px_-8px_rgba(27,19,38,0.18),0_24px_60px_-20px_rgba(27,19,38,0.30)] animate-modal-in"
           >
             <button
               type="button"
               role="menuitem"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleStar() }}
+              className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[13px] font-semibold text-[var(--text-primary)] transition-colors hover:bg-[#4F46E5]/[0.08]"
+            >
+              <span className="grid h-[22px] w-[22px] place-items-center rounded-md bg-[#F59E0B]/12 text-[#F59E0B]">
+                <Star size={14} fill={note.starred ? 'currentColor' : 'none'} />
+              </span>
+              {note.starred ? 'Unstar' : 'Star'}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTogglePin() }}
+              className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[13px] font-semibold text-[var(--text-primary)] transition-colors hover:bg-[#4F46E5]/[0.08]"
+            >
+              <span className="grid h-[22px] w-[22px] place-items-center rounded-md" style={{ background: sw.tint, color: sw.swatch }}>
+                {note.pinned ? <PinOff size={14} /> : <Pin size={14} />}
+              </span>
+              {note.pinned ? 'Unpin' : 'Pin to top'}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEdit() }}
-              className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[13px] font-semibold text-[var(--text-primary)] transition-colors hover:bg-[#7758A3]/[0.08]"
+              className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[13px] font-semibold text-[var(--text-primary)] transition-colors hover:bg-[#4F46E5]/[0.08]"
             >
               <span className="grid h-[22px] w-[22px] place-items-center rounded-md" style={{ background: sw.tint, color: sw.swatch }}>
                 <EditIcon size={14} />
@@ -551,8 +622,8 @@ function EmptyNotes({ accent, onCreate }: { accent: ReturnType<typeof getSwatch>
           </PaperSheet>
 
           <span className="note-sparkle absolute right-2.5 top-[-10px] text-[28px] font-bold" style={{ color: accent.swatch }}>✦</span>
-          <span className="note-sparkle absolute bottom-5 left-[-16px] text-[22px] font-bold" style={{ color: '#F59E0B', animationDelay: '1s' }}>✦</span>
-          <span className="note-sparkle absolute right-[-10px] top-1/2 text-[26px] font-bold" style={{ color: '#F99A00', animationDelay: '2s' }}>+</span>
+          <span className="note-sparkle absolute bottom-5 left-[-16px] text-[22px] font-bold" style={{ color: '#818CF8', animationDelay: '1s' }}>✦</span>
+          <span className="note-sparkle absolute right-[-10px] top-1/2 text-[26px] font-bold" style={{ color: '#4F46E5', animationDelay: '2s' }}>+</span>
         </div>
 
         <div className="relative z-[1]">
@@ -569,7 +640,7 @@ function EmptyNotes({ accent, onCreate }: { accent: ReturnType<typeof getSwatch>
             type="button"
             onClick={onCreate}
             className="inline-flex items-center gap-2.5 rounded-full px-6 py-3.5 text-[15px] font-bold text-white transition-transform hover:-translate-y-0.5"
-            style={{ background: `linear-gradient(135deg, ${accent.swatch}, #F99A00)`, boxShadow: `0 14px 30px -10px ${accent.tint}` }}
+            style={{ background: `linear-gradient(135deg, ${accent.swatch}, #4F46E5)`, boxShadow: `0 14px 30px -10px ${accent.tint}` }}
           >
             <PlusIcon size={14} />
             Create your first note

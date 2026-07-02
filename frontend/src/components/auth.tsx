@@ -50,7 +50,7 @@ function GitHubG() {
 
 /** Shared input styling for the auth form fields. */
 export const authInputClass =
-  'w-full rounded-xl border-[1.5px] border-[var(--border-subtle)] bg-[var(--surface-input)] px-4 py-3.5 text-[15px] text-[var(--text-primary)] outline-none transition-all placeholder:text-[var(--text-secondary)]/60 focus:border-[#7758A3] focus:bg-[var(--surface-input-focus)] focus:ring-4 focus:ring-[#7758A3]/15'
+  'w-full rounded-xl border-[1.5px] border-[var(--border-subtle)] bg-[var(--surface-input)] px-4 py-3.5 text-[15px] text-[var(--text-primary)] outline-none transition-all placeholder:text-[var(--text-secondary)]/60 focus:border-[#4F46E5] focus:bg-[var(--surface-input-focus)] focus:ring-4 focus:ring-[#4F46E5]/15'
 
 interface AuthLayoutProps {
   /** Right-hand header pill. */
@@ -92,14 +92,14 @@ export function FormCard({ children }: { children: ReactNode }) {
   return (
     <div
       data-cursor-block
-      className="relative rounded-[24px] border border-[var(--border-subtle)] bg-[var(--surface)] p-9 shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_30px_60px_-28px_rgba(119,88,163,0.35),0_8px_20px_-10px_rgba(27,19,38,0.12)]"
+      className="relative rounded-[24px] border border-[var(--border-subtle)] bg-[var(--surface)] p-9 shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_30px_60px_-28px_rgba(79,70,229,0.35),0_8px_20px_-10px_rgba(27,19,38,0.12)]"
     >
       <div
         aria-hidden="true"
         className="absolute inset-[-1px] -z-10 rounded-[25px] opacity-60 blur-[12px]"
         style={{
           background:
-            'linear-gradient(135deg, rgba(249,154,0,0.28), transparent 40%, rgba(242,106,27,0.20))',
+            'linear-gradient(135deg, rgba(79,70,229,0.28), transparent 40%, rgba(67,56,202,0.20))',
         }}
       />
       {children}
@@ -161,7 +161,7 @@ export function CheckSquare({ checked }: { checked: boolean }) {
   return (
     <span
       className={`grid h-[18px] w-[18px] flex-shrink-0 place-items-center rounded-[5px] border-[1.5px] transition-all ${
-        checked ? 'border-[#7758A3] bg-[#7758A3]' : 'border-[var(--border-subtle)] bg-[var(--surface)]'
+        checked ? 'border-[#4F46E5] bg-[#4F46E5]' : 'border-[var(--border-subtle)] bg-[var(--surface)]'
       }`}
     >
       <svg
@@ -186,7 +186,7 @@ export function AuthSuccess({ title, subtitle }: { title: string; subtitle: stri
   return (
     <div className="flex flex-col items-center gap-3.5 py-[30px] text-center">
       <motion.div
-        className="grid h-[72px] w-[72px] place-items-center rounded-full bg-[#F99A00] shadow-[0_0_0_8px_rgba(249,154,0,0.16)]"
+        className="grid h-[72px] w-[72px] place-items-center rounded-full bg-[#4F46E5] shadow-[0_0_0_8px_rgba(79,70,229,0.16)]"
         initial={{ scale: 0.5, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 320, damping: 18 }}
@@ -202,11 +202,11 @@ export function AuthSuccess({ title, subtitle }: { title: string; subtitle: stri
         {title}
       </h3>
       <p className="m-0 text-sm text-[var(--text-secondary)]">{subtitle}</p>
-      <div className="mt-3 h-1 w-[200px] overflow-hidden rounded-full bg-[#F99A00]/10">
+      <div className="mt-3 h-1 w-[200px] overflow-hidden rounded-full bg-[#4F46E5]/10">
         <span
           className="block h-full w-1/2 rounded-full"
           style={{
-            background: 'linear-gradient(90deg, #FFC24B, #F99A00, #F26A1B)',
+            background: 'linear-gradient(90deg, #6366F1, #4F46E5, #4338CA)',
             animation: 'loadbar 1.4s ease-in-out infinite',
           }}
         />

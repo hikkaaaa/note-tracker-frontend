@@ -125,7 +125,7 @@ export function CreateNoteModal({
         <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5 px-6 pb-6 pt-[22px]">
           <div className="flex flex-col gap-2">
             <label htmlFor="note-name" className="text-[15px] font-bold tracking-[-0.01em]">
-              Note Name <span className="text-[#F99A00]">*</span>
+              Note Name <span className="text-[#4F46E5]">*</span>
             </label>
             <input
               ref={nameRef}
