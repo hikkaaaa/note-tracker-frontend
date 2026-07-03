@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { Star, Pin, PinOff } from 'lucide-react'
+import { Star, Pin, PinOff, Share2, Lock } from 'lucide-react'
 import { CreateNoteModal } from '../components/CreateNoteModal'
 import type { FormState as NoteFormState, NoteInitial } from '../components/CreateNoteModal'
 import { DeleteNoteModal } from '../components/DeleteNoteModal'
+import { ShareModal } from '../components/ShareModal'
 import { fetchFolder, createNote, updateNote, deleteNote } from '../lib/workspace'
 import { getAuthToken } from '../lib/authToken'
 import type { FolderColor, LocalFolder, LocalNote } from '../lib/localWorkspace'
@@ -143,6 +144,7 @@ export function FolderDetailPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingNote, setEditingNote] = useState<LocalNote | null>(null)
   const [deletingNote, setDeletingNote] = useState<LocalNote | null>(null)
+  const [sharingNote, setSharingNote] = useState<LocalNote | null>(null)
   const [menuOpenId, setMenuOpenId] = useState<number | null>(null)
 
   const fetchFolderData = useCallback(async () => {
@@ -168,6 +170,9 @@ export function FolderDetailPage() {
 
   const accent = getSwatch(folder?.color ?? 'violet')
   const notes = useMemo(() => folder?.notes ?? [], [folder])
+  // A folder reached through an accepted share is read-only: no create/edit/delete/share,
+  // just browse. The backend also 404s any write, so this is UI-only.
+  const readOnly = folder?.readOnly ?? false
 
   const matchesNoteFilter = useCallback((n: LocalNote, f: NoteFilter, now: number) => {
     if (f === 'Starred') return n.starred
@@ -287,6 +292,11 @@ export function FolderDetailPage() {
               <span className="h-2 w-2 rounded-full" style={{ background: accent.swatch, boxShadow: '0 0 0 3px rgba(255,255,255,0.6)' }} />
               {folder?.name ?? '…'}
             </span>
+            {readOnly && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-1.5 text-[12.5px] font-semibold text-[var(--text-secondary)]">
+                <Lock size={12} /> Shared · read-only
+              </span>
+            )}
           </div>
         </header>
 
@@ -310,16 +320,18 @@ export function FolderDetailPage() {
               />
             </div>
 
-            <button
-              type="button"
-              onClick={openCreate}
-              className="bg-[var(--btn-primary-bg)] inline-flex shrink-0 items-center justify-center gap-2.5 rounded-full py-[14px] pl-2.5 pr-8 text-sm font-semibold text-[var(--btn-primary-text)] shadow-[0_14px_30px_-16px_rgba(27,19,38,0.5)] transition-transform hover:-translate-y-px"
-            >
-              <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-white/20 text-white">
-                <PlusIcon size={13} />
-              </span>
-              New Note
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={openCreate}
+                className="bg-[var(--btn-primary-bg)] inline-flex shrink-0 items-center justify-center gap-2.5 rounded-full py-[14px] pl-2.5 pr-8 text-sm font-semibold text-[var(--btn-primary-text)] shadow-[0_14px_30px_-16px_rgba(27,19,38,0.5)] transition-transform hover:-translate-y-px"
+              >
+                <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-white/20 text-white">
+                  <PlusIcon size={13} />
+                </span>
+                New Note
+              </button>
+            )}
           </div>
         </section>
 
@@ -363,7 +375,11 @@ export function FolderDetailPage() {
         )}
 
         {isEmpty ? (
-          <EmptyNotes accent={accent} onCreate={openCreate} />
+          readOnly ? (
+            <div className="py-16 text-center text-[var(--text-secondary)]">No notes were shared in this folder.</div>
+          ) : (
+            <EmptyNotes accent={accent} onCreate={openCreate} />
+          )
         ) : filtered.length > 0 ? (
           <main className="relative z-[2] grid grid-cols-1 gap-[22px] sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
             {filtered.map((note, i) => (
@@ -372,12 +388,14 @@ export function FolderDetailPage() {
                 note={note}
                 folderColor={folder!.color}
                 tilt={(i % 5) - 2}
+                readOnly={readOnly}
                 menuOpen={menuOpenId === note.id}
                 onMenuToggle={() => setMenuOpenId((id) => (id === note.id ? null : note.id))}
                 onMenuClose={() => setMenuOpenId(null)}
                 onOpen={() => navigate(`/notes/${note.id}`)}
                 onEdit={() => { setEditingNote(note); setIsModalOpen(true); setMenuOpenId(null) }}
                 onDelete={() => { setDeletingNote(note); setMenuOpenId(null) }}
+                onShare={() => { setSharingNote(note); setMenuOpenId(null) }}
                 onToggleStar={() => handleToggleStar(note)}
                 onTogglePin={() => handleTogglePin(note)}
               />
@@ -418,6 +436,14 @@ export function FolderDetailPage() {
           onConfirm={handleConfirmDelete}
         />
       )}
+
+      {sharingNote && folder && (
+        <ShareModal
+          folder={folder}
+          singleNote={sharingNote}
+          onClose={() => setSharingNote(null)}
+        />
+      )}
     </div>
   )
 }
@@ -427,24 +453,28 @@ function NoteCard({
   note,
   folderColor,
   tilt,
+  readOnly,
   menuOpen,
   onMenuToggle,
   onMenuClose,
   onOpen,
   onEdit,
   onDelete,
+  onShare,
   onToggleStar,
   onTogglePin,
 }: {
   note: LocalNote
   folderColor: FolderColor
   tilt: number
+  readOnly?: boolean
   menuOpen: boolean
   onMenuToggle: () => void
   onMenuClose: () => void
   onOpen: () => void
   onEdit: () => void
   onDelete: () => void
+  onShare: () => void
   onToggleStar: () => void
   onTogglePin: () => void
 }) {
@@ -515,7 +545,8 @@ function NoteCard({
         <p className="m-0 truncate pr-9 text-[13px] font-medium text-[var(--text-secondary)]">{note.purpose || '—'}</p>
       </div>
 
-      {/* more menu */}
+      {/* more menu — hidden on read-only (shared) notes */}
+      {!readOnly && (
       <div className="absolute bottom-3.5 right-3.5 z-[5]" ref={menuRef}>
         <button
           type="button"
@@ -560,6 +591,17 @@ function NoteCard({
             <button
               type="button"
               role="menuitem"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShare() }}
+              className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[13px] font-semibold text-[var(--text-primary)] transition-colors hover:bg-[#4F46E5]/[0.08]"
+            >
+              <span className="grid h-[22px] w-[22px] place-items-center rounded-md bg-[#0EA5E9]/10 text-[#0EA5E9]">
+                <Share2 size={14} />
+              </span>
+              Share
+            </button>
+            <button
+              type="button"
+              role="menuitem"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEdit() }}
               className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[13px] font-semibold text-[var(--text-primary)] transition-colors hover:bg-[#4F46E5]/[0.08]"
             >
@@ -582,6 +624,7 @@ function NoteCard({
           </div>
         )}
       </div>
+      )}
     </article>
   )
 }

@@ -15,9 +15,11 @@ import {
 } from '../components/auth'
 import { saveAuth, getAuthToken } from '../lib/authToken'
 import { API_BASE } from '../lib/api'
+import { useProfile } from '../lib/profileContext'
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const { refresh: refreshProfile } = useProfile()
   const [nickname, setNickname] = useState('')
   const [pwd, setPwd] = useState('')
   const [showPwd, setShowPwd] = useState(false)
@@ -46,6 +48,9 @@ export function LoginPage() {
       }
       const data = await res.json()
       saveAuth(data.access_token, data.user, remember)
+      // Hydrate the shared profile for the new session so the dashboard header avatar
+      // (and default view) are correct the moment we land there.
+      void refreshProfile()
       setLoading(false)
       setSubmitted(true)
     } catch {

@@ -7,6 +7,7 @@ import { ProfilePage } from './pages/ProfilePage'
 import { FolderDetailPage } from './pages/FolderDetailPage'
 import { NoteEditorPage } from './pages/NoteEditorPage'
 import { ThemeProvider } from './lib/theme'
+import { ProfileProvider } from './lib/profileProvider'
 
 const router = createBrowserRouter([
   { path: '/', element: <LandingPage /> },
@@ -21,7 +22,9 @@ const router = createBrowserRouter([
 function App() {
   return (
     <ThemeProvider>
-      <RouterProvider router={router} />
+      <ProfileProvider>
+        <RouterProvider router={router} />
+      </ProfileProvider>
     </ThemeProvider>
   )
 }

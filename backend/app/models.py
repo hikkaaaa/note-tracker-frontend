@@ -27,6 +27,13 @@ class User(Base):
     gender = Column(String, nullable=False, default="", server_default="")
     avatar = Column(Text, nullable=False, default="", server_default="")
 
+    # Preferences shown on /profile. default_view seeds the dashboard's grid/list toggle;
+    # the two notify_* flags drive (future) email notifications. Server-side defaults so the
+    # columns can be added to a pre-existing table with existing rows backfilling cleanly.
+    default_view = Column(String, nullable=False, default="grid", server_default="grid")
+    notify_weekly_summary = Column(Boolean, nullable=False, default=False, server_default="0")
+    notify_folder_shared = Column(Boolean, nullable=False, default=True, server_default="1")
+
     # Every folder belongs to exactly one user.
     folders = relationship("Folder", back_populates="owner", cascade="all, delete-orphan")
 
@@ -52,9 +59,14 @@ class Folder(Base):
     # Last time the folder's own fields changed. The "Recent" filter combines this with the
     # newest note activity inside the folder (see _folder_out).
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+    # Set once on insert. Surfaced (per folder) in the profile's account directory.
+    created_at = Column(DateTime, default=_utcnow)
 
     owner = relationship("User", back_populates="folders")
     notes = relationship("Note", back_populates="folder", cascade="all, delete-orphan")
+    # Shares of this folder. Cascade so a hard purge (db.delete(folder)) drops the share
+    # rows too, revoking recipients' access — see the Trash purge routes.
+    shares = relationship("Share", back_populates="folder", cascade="all, delete-orphan")
 
 class Note(Base):
     __tablename__ = "notes"
@@ -81,6 +93,9 @@ class Note(Base):
 
     folder = relationship("Folder", back_populates="notes")
     sections = relationship("Section", back_populates="note", cascade="all, delete-orphan")
+    # Association rows tying this note into partial folder shares. Cascade so purging the
+    # note (db.delete(note)) removes it from any share it was individually part of.
+    share_links = relationship("ShareNote", back_populates="note", cascade="all, delete-orphan")
 
 class Section(Base):
     __tablename__ = "sections"
@@ -94,3 +109,41 @@ class Section(Base):
     title = Column(String, nullable=True)
 
     note = relationship("Note", back_populates="sections")
+
+
+class Share(Base):
+    """One folder shared from a sender to a recipient. A full-folder share (full_folder=True)
+    grants the recipient every live note in the folder, including notes added later; a partial
+    share grants only the notes listed in `notes` (ShareNote rows). Read-only by design — the
+    recipient only ever gains access to GET endpoints, never the mutation routes."""
+    __tablename__ = "shares"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sender_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    recipient_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    folder_id = Column(Integer, ForeignKey("folders.id"), index=True, nullable=False)
+    # True = share the whole folder (all current and future notes); False = only the notes
+    # enumerated in `notes` below.
+    full_folder = Column(Boolean, nullable=False, default=False, server_default="0")
+    # PENDING (awaiting the recipient's decision) → ACCEPTED / DECLINED. Only ACCEPTED shares
+    # grant read access; PENDING ones surface as notifications; DECLINED ones are kept for
+    # history but hidden everywhere.
+    status = Column(String, nullable=False, default="PENDING", server_default="PENDING")
+    created_at = Column(DateTime, default=_utcnow)
+
+    sender = relationship("User", foreign_keys=[sender_id])
+    recipient = relationship("User", foreign_keys=[recipient_id])
+    folder = relationship("Folder", back_populates="shares")
+    notes = relationship("ShareNote", back_populates="share", cascade="all, delete-orphan")
+
+
+class ShareNote(Base):
+    """Association row naming a single note in a partial folder share."""
+    __tablename__ = "share_notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    share_id = Column(Integer, ForeignKey("shares.id"), index=True, nullable=False)
+    note_id = Column(Integer, ForeignKey("notes.id"), index=True, nullable=False)
+
+    share = relationship("Share", back_populates="notes")
+    note = relationship("Note", back_populates="share_links")
