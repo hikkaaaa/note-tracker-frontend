@@ -15,6 +15,7 @@ interface ApiNote {
   pinned?: boolean
   created_at?: string | null
   updated_at?: string | null
+  read_only?: boolean
 }
 
 interface ApiFolder {
@@ -26,6 +27,7 @@ interface ApiFolder {
   archived?: boolean
   last_activity?: string | null
   notes?: ApiNote[]
+  read_only?: boolean
 }
 
 // Notes have no color of their own; they inherit their parent folder's color at render time.
@@ -38,6 +40,7 @@ function mapNote(n: ApiNote): LocalNote {
     updated_at: n.updated_at ?? '',
     starred: Boolean(n.starred),
     pinned: Boolean(n.pinned),
+    readOnly: n.read_only ? true : undefined,
   }
 }
 
@@ -51,6 +54,7 @@ function mapFolder(f: ApiFolder): LocalFolder {
     archived: Boolean(f.archived),
     lastActivity: f.last_activity ?? '',
     notes: (f.notes ?? []).map(mapNote),
+    readOnly: f.read_only ? true : undefined,
   }
 }
 
@@ -181,4 +185,96 @@ export async function purgeFolderForever(id: number): Promise<void> {
 export async function purgeNoteForever(id: number): Promise<void> {
   const res = await authedFetch(`/trash/notes/${id}`, { method: 'DELETE' })
   if (!res.ok) throw new Error('Could not permanently delete the note.')
+}
+
+// --- SHARING ---
+// One pending share as shown in the recipient's notification panel.
+export interface ShareNotification {
+  id: number
+  senderNickname: string
+  folderName: string
+  folderColor: FolderColor
+  fullFolder: boolean
+  noteCount: number
+  createdAt: string | null
+}
+
+interface ApiNotification {
+  id: number
+  sender_nickname: string
+  folder_name: string
+  folder_color?: string | null
+  full_folder: boolean
+  note_count: number
+  created_at?: string | null
+}
+
+// A folder shared with (and accepted by) the current user — read-only, tagged with the sender.
+export interface SharedFolder extends LocalFolder {
+  sharedBy: string
+  shareId: number
+}
+
+interface ApiSharedFolder extends ApiFolder {
+  share_id: number
+  shared_by: string
+}
+
+// Share a folder (fullFolder) or a subset of its notes (noteIds) with a user by nickname.
+// Surfaces the backend's error message (unknown nickname / self-share) so the modal can show it.
+export async function shareResource(input: {
+  recipientNickname: string
+  folderId: number
+  fullFolder: boolean
+  noteIds: number[]
+}): Promise<void> {
+  const res = await authedFetch('/api/shares', {
+    method: 'POST',
+    body: JSON.stringify({
+      recipient_nickname: input.recipientNickname,
+      folder_id: input.folderId,
+      full_folder: input.fullFolder,
+      note_ids: input.noteIds,
+    }),
+  })
+  if (!res.ok) {
+    let detail = 'Could not share that.'
+    try { detail = (await res.json())?.detail ?? detail } catch { /* keep default */ }
+    throw new Error(detail)
+  }
+}
+
+export async function fetchNotifications(): Promise<ShareNotification[]> {
+  const res = await authedFetch('/api/notifications')
+  if (!res.ok) throw new Error('Could not load notifications.')
+  const data = (await res.json()) as ApiNotification[]
+  return data.map((n) => ({
+    id: n.id,
+    senderNickname: n.sender_nickname,
+    folderName: n.folder_name,
+    folderColor: normalizeFolderColor(n.folder_color ?? undefined),
+    fullFolder: n.full_folder,
+    noteCount: n.note_count,
+    createdAt: n.created_at ?? null,
+  }))
+}
+
+export async function respondToShare(id: number, action: 'ACCEPT' | 'DECLINE'): Promise<void> {
+  const res = await authedFetch(`/api/shares/${id}/respond`, {
+    method: 'PUT',
+    body: JSON.stringify({ action }),
+  })
+  if (!res.ok) throw new Error('Could not update the notification.')
+}
+
+export async function fetchSharedFolders(): Promise<SharedFolder[]> {
+  const res = await authedFetch('/api/shared')
+  if (!res.ok) throw new Error('Could not load shared folders.')
+  const data = (await res.json()) as ApiSharedFolder[]
+  return data.map((f) => ({
+    ...mapFolder(f),
+    readOnly: true,
+    sharedBy: f.shared_by,
+    shareId: f.share_id,
+  }))
 }

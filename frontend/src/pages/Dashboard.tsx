@@ -1,15 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useNavigate } from 'react-router-dom'
-import { RotateCcw, Trash2, ChevronLeft, FileText, FolderOpen, Info, Pin, PinOff, Archive, ArchiveRestore, Users } from 'lucide-react'
+import { RotateCcw, Trash2, ChevronLeft, FileText, FolderOpen, Info, Pin, PinOff, Archive, ArchiveRestore, Users, Share2, Check, X } from 'lucide-react'
 import { CreateFolderModal } from '../components/CreateFolderModal'
 import type { FormState as FolderFormState } from '../components/CreateFolderModal'
 import { DeleteFolderModal } from '../components/DeleteFolderModal'
+import { ShareModal } from '../components/ShareModal'
 import type { LocalFolder, LocalNote } from '../lib/localWorkspace'
 import { fetchFolders, createFolder, updateFolder, deleteFolder } from '../lib/workspace'
 import { fetchTrash, fetchTrashFolderNotes, restoreFolder, restoreNote, purgeFolderForever, purgeNoteForever } from '../lib/workspace'
-import type { TrashFolderItem } from '../lib/workspace'
+import { fetchSharedFolders, fetchNotifications, respondToShare } from '../lib/workspace'
+import type { TrashFolderItem, SharedFolder, ShareNotification } from '../lib/workspace'
 import { getAuthToken, getAuthUser } from '../lib/authToken'
-import { fetchProfile } from '../lib/profile'
+import { useProfile } from '../lib/profileContext'
 import { getSwatch } from '../lib/folderColors'
 import { BrandLogo } from '../components/BrandLogo'
 import { CardActionMenu } from '../components/CardActionMenu'
@@ -162,25 +165,35 @@ export function Dashboard() {
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false)
   const [editingFolder, setEditingFolder] = useState<LocalFolder | null>(null)
   const [deletingFolder, setDeletingFolder] = useState<LocalFolder | null>(null)
+  const [sharingFolder, setSharingFolder] = useState<LocalFolder | null>(null)
   const [menuOpenId, setMenuOpenId] = useState<number | null>(null)
 
+  // Sharing: folders shared with me (accepted) back the "Shared" filter; pending shares
+  // drive the notification bell.
+  const [sharedFolders, setSharedFolders] = useState<SharedFolder[]>([])
+  const [sharedLoading, setSharedLoading] = useState(false)
+  const [notifications, setNotifications] = useState<ShareNotification[]>([])
+  const [notifOpen, setNotifOpen] = useState(false)
+
   const authUser = getAuthUser()
-  const [avatar, setAvatar] = useState('')
+  // Shared profile: the header avatar updates live when /profile saves a change.
+  const { profile } = useProfile()
+  const avatar = profile?.avatar ?? ''
+  const viewSeeded = useRef(false)
 
   // Gate the dashboard behind a session: no token → straight to login.
   useEffect(() => {
     if (!getAuthToken()) navigate('/login', { replace: true })
   }, [navigate])
 
-  // Pull the avatar from the backend profile for the header pill.
+  // Seed the grid/list toggle from the saved default view — once, so a later manual
+  // toggle isn't clobbered when the profile re-loads.
   useEffect(() => {
-    if (!getAuthToken()) return
-    let cancelled = false
-    fetchProfile()
-      .then((p) => { if (!cancelled) setAvatar(p.avatar) })
-      .catch(() => { /* header falls back to the initial glyph */ })
-    return () => { cancelled = true }
-  }, [])
+    if (!viewSeeded.current && profile) {
+      setView(profile.defaultView)
+      viewSeeded.current = true
+    }
+  }, [profile])
 
   // Load the signed-in user's folders from the backend.
   useEffect(() => {
@@ -194,13 +207,51 @@ export function Dashboard() {
     return () => { cancelled = true }
   }, [])
 
+  // Folders shared with me — loaded once on mount so the "Shared" filter badge is accurate,
+  // and re-loadable after accepting a notification.
+  const loadShared = useCallback(async () => {
+    setSharedLoading(true)
+    try { setSharedFolders(await fetchSharedFolders()) }
+    catch { /* non-fatal: the Shared tab just shows empty */ }
+    finally { setSharedLoading(false) }
+  }, [])
+
+  // Pending share notifications — polled so the bell reflects new incoming shares without a
+  // manual refresh.
+  const loadNotifications = useCallback(async () => {
+    try { setNotifications(await fetchNotifications()) }
+    catch { /* keep the last known list */ }
+  }, [])
+
+  useEffect(() => {
+    if (!getAuthToken()) return
+    loadShared()
+    loadNotifications()
+    const id = setInterval(loadNotifications, 30_000)
+    return () => clearInterval(id)
+  }, [loadShared, loadNotifications])
+
+  // Accept/decline a pending share, then refresh: accepting reveals the folder under "Shared".
+  const handleRespond = async (id: number, action: 'ACCEPT' | 'DECLINE') => {
+    setNotifications((cur) => cur.filter((n) => n.id !== id))
+    try {
+      await respondToShare(id, action)
+      if (action === 'ACCEPT') await loadShared()
+    } catch {
+      loadNotifications() // put it back if the write failed
+    }
+  }
+
   // Folder counts per filter tab (search-independent) for the pill badges.
   const filterCounts = useMemo(() => {
     const now = Date.now()
-    return Object.fromEntries(
+    const counts = Object.fromEntries(
       FILTERS.map((f) => [f, folders.filter((folder) => matchesFilter(folder, f, now)).length]),
     ) as Record<Filter, number>
-  }, [folders])
+    // "Shared" isn't part of the owned-folders list — it's the accepted-shares count.
+    counts.Shared = sharedFolders.length
+    return counts
+  }, [folders, sharedFolders])
 
   const filtered = useMemo(() => {
     const now = Date.now()
@@ -212,6 +263,15 @@ export function Dashboard() {
         folder.name.toLowerCase().includes(k) || folder.purpose.toLowerCase().includes(k),
     )
   }, [folders, q, filter])
+
+  // Shared folders under the current search query (same name/purpose match as owned folders).
+  const filteredShared = useMemo(() => {
+    const k = q.trim().toLowerCase()
+    if (!k) return sharedFolders
+    return sharedFolders.filter(
+      (f) => f.name.toLowerCase().includes(k) || f.purpose.toLowerCase().includes(k) || (f.sharedBy ?? '').toLowerCase().includes(k),
+    )
+  }, [sharedFolders, q])
 
   // "All notes" view ignores archived folders so archived content doesn't leak back in.
   const liveFolders = useMemo(() => folders.filter((f) => !f.archived), [folders])
@@ -344,14 +404,13 @@ export function Dashboard() {
           </nav>
 
           <div className="flex items-center gap-2.5 justify-self-end">
-            <button
-              type="button"
-              aria-label="Notifications"
-              className="relative grid h-[42px] w-[42px] place-items-center rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-primary)] shadow-[0_8px_22px_-16px_rgba(27,19,38,0.2)] transition-transform hover:-translate-y-px"
-            >
-              <BellIcon />
-              <span className="absolute right-[11px] top-[9px] h-2 w-2 rounded-full bg-[#4F46E5] ring-2 ring-white" />
-            </button>
+            <NotificationBell
+              notifications={notifications}
+              open={notifOpen}
+              onToggle={() => setNotifOpen((v) => !v)}
+              onClose={() => setNotifOpen(false)}
+              onRespond={handleRespond}
+            />
             <Link
               to="/profile"
               aria-label="Open your profile and settings"
@@ -487,7 +546,7 @@ export function Dashboard() {
           </div>
         )}
 
-        {/* folder grid / list */}
+        {/* owned folder grid / list — every filter except Shared */}
         {!loading && tab === 'folders' && filter !== 'Shared' && filtered.length > 0 && (
         <main
           className={
@@ -513,6 +572,10 @@ export function Dashboard() {
                 setDeletingFolder(folder)
                 setMenuOpenId(null)
               }}
+              onShare={() => {
+                setSharingFolder(folder)
+                setMenuOpenId(null)
+              }}
               onTogglePin={() => handleTogglePin(folder)}
               onToggleArchive={() => handleToggleArchive(folder)}
             />
@@ -520,8 +583,32 @@ export function Dashboard() {
         </main>
         )}
 
-        {!loading && tab === 'folders' && (filter === 'Shared' || filtered.length === 0) && (
+        {!loading && tab === 'folders' && filter !== 'Shared' && filtered.length === 0 && (
           <FoldersEmpty filter={filter} query={q} onCreate={openCreateFolder} />
+        )}
+
+        {/* Shared filter — folders others shared with me (read-only) */}
+        {!loading && tab === 'folders' && filter === 'Shared' && (
+          sharedLoading ? (
+            <div className="relative z-[2] flex items-center justify-center gap-3 py-20 text-[var(--text-secondary)]">
+              <span className="h-5 w-5 animate-spin rounded-full border-[2.5px] border-[#4F46E5]/25 border-t-[#4F46E5]" />
+              Loading shared folders…
+            </div>
+          ) : filteredShared.length > 0 ? (
+            <main
+              className={
+                view === 'grid'
+                  ? 'relative z-[2] grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+                  : 'relative z-[2] flex flex-col gap-2.5'
+              }
+            >
+              {filteredShared.map((folder) => (
+                <FolderCard key={folder.id} folder={folder} view={view} sharedBy={folder.sharedBy} />
+              ))}
+            </main>
+          ) : (
+            <FoldersEmpty filter="Shared" query={q} onCreate={openCreateFolder} />
+          )
         )}
 
         {/* All-notes grid — every note across folders, tagged with its origin color */}
@@ -575,6 +662,13 @@ export function Dashboard() {
           onConfirm={handleConfirmDelete}
         />
       )}
+
+      {sharingFolder && (
+        <ShareModal
+          folder={sharingFolder}
+          onClose={() => setSharingFolder(null)}
+        />
+      )}
     </div>
   )
 }
@@ -588,18 +682,24 @@ function FolderCard({
   onMenuClose,
   onEdit,
   onDelete,
+  onShare,
   onTogglePin,
   onToggleArchive,
+  sharedBy,
 }: {
   folder: LocalFolder
   view: ViewMode
-  menuOpen: boolean
-  onMenuToggle: () => void
-  onMenuClose: () => void
-  onEdit: () => void
-  onDelete: () => void
-  onTogglePin: () => void
-  onToggleArchive: () => void
+  menuOpen?: boolean
+  onMenuToggle?: () => void
+  onMenuClose?: () => void
+  onEdit?: () => void
+  onDelete?: () => void
+  onShare?: () => void
+  onTogglePin?: () => void
+  onToggleArchive?: () => void
+  // When set, this is a folder shared *with* me: read-only, no mutation menu, badged with
+  // who shared it.
+  sharedBy?: string
 }) {
   const navigate = useNavigate()
   const sw = getSwatch(folder.color)
@@ -607,12 +707,20 @@ function FolderCard({
 
   const open = () => navigate(`/folders/${folder.id}`)
 
-  const menu = (
+  // A read-only "Shared by X" pill stands in for the ••• menu on shared folders.
+  const sharedBadge = sharedBy ? (
+    <span className="inline-flex max-w-full items-center gap-1.5 truncate rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: sw.tint, color: sw.swatch }}>
+      <Users size={11} />
+      <span className="truncate">Shared by {sharedBy}</span>
+    </span>
+  ) : null
+
+  const menu = sharedBy ? null : (
     <CardActionMenu
       ariaLabel={`${folder.name} options`}
-      open={menuOpen}
-      onToggle={onMenuToggle}
-      onClose={onMenuClose}
+      open={Boolean(menuOpen)}
+      onToggle={onMenuToggle ?? (() => {})}
+      onClose={onMenuClose ?? (() => {})}
       triggerClass={`grid h-9 w-9 place-items-center rounded-xl transition-colors ${
         menuOpen
           ? 'bg-[var(--accent-tint)] text-[var(--text-primary)]'
@@ -624,21 +732,28 @@ function FolderCard({
           label: folder.pinned ? 'Unpin' : 'Pin to top',
           icon: folder.pinned ? <PinOff size={14} /> : <Pin size={14} />,
           chipClass: 'bg-[#4F46E5]/10 text-[#4F46E5]',
-          onSelect: onTogglePin,
+          onSelect: onTogglePin ?? (() => {}),
         },
         {
           key: 'archive',
           label: folder.archived ? 'Unarchive' : 'Archive',
           icon: folder.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />,
           chipClass: 'bg-[#0EA5E9]/10 text-[#0EA5E9]',
-          onSelect: onToggleArchive,
+          onSelect: onToggleArchive ?? (() => {}),
+        },
+        {
+          key: 'share',
+          label: 'Share',
+          icon: <Share2 size={14} />,
+          chipClass: 'bg-[#0EA5E9]/10 text-[#0EA5E9]',
+          onSelect: onShare ?? (() => {}),
         },
         {
           key: 'edit',
           label: 'Edit',
           icon: <EditIcon size={14} />,
           chipClass: 'bg-[#4F46E5]/10 text-[#4F46E5]',
-          onSelect: onEdit,
+          onSelect: onEdit ?? (() => {}),
         },
         {
           key: 'delete',
@@ -646,7 +761,7 @@ function FolderCard({
           icon: <TrashIcon size={14} />,
           chipClass: 'bg-[#DC2626]/10 text-[#DC2626]',
           danger: true,
-          onSelect: onDelete,
+          onSelect: onDelete ?? (() => {}),
         },
       ]}
     >
@@ -674,7 +789,7 @@ function FolderCard({
         <p className="m-0 ml-auto whitespace-nowrap text-[13px] font-bold" style={{ color: sw.glyph }}>
           {noteCount} {noteCount === 1 ? 'note' : 'notes'}
         </p>
-        {menu}
+        {menu || sharedBadge}
       </article>
     )
   }
@@ -736,10 +851,11 @@ function FolderCard({
         <p className="m-0 mt-2 text-[12.5px] font-bold" style={{ opacity: 0.9 }}>
           {noteCount} {noteCount === 1 ? 'note' : 'notes'}
         </p>
+        {sharedBadge && <div className="mt-2">{sharedBadge}</div>}
       </div>
 
-      {/* more menu — bottom-right */}
-      <div className="absolute bottom-4 right-4 z-[4]">{menu}</div>
+      {/* more menu — bottom-right (owned folders only) */}
+      {menu && <div className="absolute bottom-4 right-4 z-[4]">{menu}</div>}
     </article>
   )
 }
@@ -760,8 +876,10 @@ function FoldersEmpty({ filter, query, onCreate }: { filter: Filter; query: stri
     body = <>No folders match "<b className="text-[var(--text-primary)]">{query}</b>". Try a different search.</>
   } else if (filter === 'Shared') {
     Icon = Users
-    title = 'Sharing is coming soon'
-    body = 'Folders you share with teammates will show up here.'
+    title = searching ? 'No matches' : 'Nothing shared with you yet'
+    body = searching
+      ? <>No shared folders match "<b className="text-[var(--text-primary)]">{query}</b>".</>
+      : 'When someone shares a folder or notes with you and you accept, they’ll show up here.'
   } else if (filter === 'Pinned') {
     Icon = Pin
     title = 'No pinned folders'
@@ -1029,5 +1147,143 @@ function TrashView() {
         </main>
       )}
     </div>
+  )
+}
+
+/* ---------- notification bell ----------
+   The header bell: a dot when there are pending shares, and a portal popover listing each
+   pending share with Allow / Decline. Same outside-click / Escape dismissal as CardActionMenu. */
+function NotificationBell({
+  notifications,
+  open,
+  onToggle,
+  onClose,
+  onRespond,
+}: {
+  notifications: ShareNotification[]
+  open: boolean
+  onToggle: () => void
+  onClose: () => void
+  onRespond: (id: number, action: 'ACCEPT' | 'DECLINE') => void
+}) {
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
+  const count = notifications.length
+
+  // Anchor the panel under the bell, flush to the right edge of the viewport gutter.
+  useEffect(() => {
+    if (!open) return
+    const update = () => {
+      const b = btnRef.current
+      if (!b) return
+      const r = b.getBoundingClientRect()
+      setPos({ top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right) })
+    }
+    update()
+    window.addEventListener('scroll', update, true)
+    window.addEventListener('resize', update)
+    return () => {
+      window.removeEventListener('scroll', update, true)
+      window.removeEventListener('resize', update)
+    }
+  }, [open])
+
+  // Close on outside click / Escape.
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (panelRef.current?.contains(t) || btnRef.current?.contains(t)) return
+      onClose()
+    }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open, onClose])
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        aria-label="Notifications"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={onToggle}
+        className="relative grid h-[42px] w-[42px] place-items-center rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-primary)] shadow-[0_8px_22px_-16px_rgba(27,19,38,0.2)] transition-transform hover:-translate-y-px"
+      >
+        <BellIcon />
+        {count > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-[#4F46E5] px-1 text-[10px] font-bold text-white ring-2 ring-[var(--surface)]">
+            {count > 9 ? '9+' : count}
+          </span>
+        )}
+      </button>
+
+      {open && pos && createPortal(
+        <div
+          ref={panelRef}
+          role="menu"
+          style={{ position: 'fixed', top: pos.top, right: pos.right, width: 340 }}
+          className="z-[300] max-h-[70vh] overflow-y-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-2 text-[var(--text-primary)] shadow-[0_10px_24px_-8px_rgba(27,19,38,0.18),0_24px_60px_-20px_rgba(27,19,38,0.30)] animate-modal-in scrollbar-slim"
+        >
+          <div className="flex items-center justify-between px-3 py-2">
+            <h3 className="m-0 text-[15px] font-extrabold tracking-[-0.01em]" style={{ fontFamily: bricolage }}>Notifications</h3>
+            <button onClick={onClose} aria-label="Close" className="grid h-7 w-7 place-items-center rounded-lg text-[var(--text-secondary)] transition-colors hover:bg-[var(--text-primary)]/[0.06] hover:text-[var(--text-primary)]">
+              <X size={16} />
+            </button>
+          </div>
+
+          {count === 0 ? (
+            <div className="px-3 py-8 text-center text-[13px] text-[var(--text-secondary)]">
+              <div className="mx-auto mb-2 grid h-11 w-11 place-items-center rounded-full bg-[#4F46E5]/[0.08] text-[#4F46E5]"><BellIcon size={18} /></div>
+              You’re all caught up.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {notifications.map((n) => {
+                const sw = getSwatch(n.folderColor)
+                return (
+                  <div key={n.id} className="rounded-xl border border-[var(--border-subtle)] p-3">
+                    <p className="m-0 text-[13px] leading-snug">
+                      <b className="font-bold">{n.senderNickname}</b> shared {n.fullFolder ? 'a folder' : 'notes'} with you
+                    </p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="inline-flex min-w-0 items-center gap-1.5 truncate rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: sw.tint, color: sw.swatch }}>
+                        <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full" style={{ background: sw.swatch }} />
+                        <span className="truncate">{n.folderName}</span>
+                      </span>
+                      <span className="whitespace-nowrap text-[11.5px] text-[var(--text-secondary)]">
+                        {n.fullFolder ? 'Whole folder' : `${n.noteCount} ${n.noteCount === 1 ? 'note' : 'notes'}`}
+                      </span>
+                    </div>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={() => onRespond(n.id, 'ACCEPT')}
+                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[var(--btn-primary-bg)] px-3 py-2 text-[12.5px] font-bold text-white transition-transform hover:-translate-y-px"
+                      >
+                        <Check size={14} strokeWidth={3} /> Allow
+                      </button>
+                      <button
+                        onClick={() => onRespond(n.id, 'DECLINE')}
+                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[var(--border-subtle)] px-3 py-2 text-[12.5px] font-semibold text-[var(--text-secondary)] transition-colors hover:bg-[var(--text-primary)]/[0.05] hover:text-[var(--text-primary)]"
+                      >
+                        <X size={14} /> Decline
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>,
+        document.body,
+      )}
+    </>
   )
 }

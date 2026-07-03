@@ -40,9 +40,10 @@
     --accent-soft: #C7D2FE;
     --accent-tint: rgba(79, 70, 229, 0.12);
     --accent-gradient: linear-gradient(120deg, #6366F1, #4F46E5, #4338CA);
-    /* Indigo-500 for filled buttons — bold enough to read as the brand accent, a touch softer
-       than the old punchy #4F46E5, and the same hue as the indigo folder swatch. */
-    --btn-primary-bg: #6366F1;
+    /* Softened periwinkle-indigo for filled buttons — calmer than the punchy #4F46E5 so the
+       purple controls sit in the same muted family as the folder cards, while keeping white
+       label text legible. */
+    --btn-primary-bg: #6E6AE0;
     --btn-primary-text: #FFFFFF;
     --danger-text: #B91C1C;
     --danger-border: rgba(220, 38, 38, 0.30);
@@ -75,7 +76,7 @@
     --accent-soft: #4338CA;
     --accent-tint: rgba(129, 140, 248, 0.16);
     --accent-gradient: linear-gradient(120deg, #A5B4FC, #818CF8, #6366F1);
-    --btn-primary-bg: #6366F1;
+    --btn-primary-bg: #7C79E6;
     --btn-primary-text: #FFFFFF;
     --danger-text: #F87171;
     --danger-border: rgba(248, 113, 113, 0.32);

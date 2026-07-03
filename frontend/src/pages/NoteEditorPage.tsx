@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Plus, Type, CheckSquare, ListTodo, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Check, Loader2, Trash2, List as ListIcon, Table as TableIcon, LayoutDashboard, LayoutList, GripVertical, MoreVertical, Copy, ClipboardPaste, Download, Code2, Heading, Image as ImageIcon, Timer as TimerIcon, CalendarDays } from 'lucide-react'
+import { Plus, Type, CheckSquare, ListTodo, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Check, Loader2, Trash2, List as ListIcon, Table as TableIcon, LayoutDashboard, LayoutList, GripVertical, MoreVertical, Copy, ClipboardPaste, Download, Code2, Heading, Image as ImageIcon, Timer as TimerIcon, CalendarDays, Lock } from 'lucide-react'
 import { useReactToPrint } from 'react-to-print'
 import { DndContext, DragOverlay, useDraggable, useDroppable, pointerWithin } from '@dnd-kit/core'
 import type { DragStartEvent, DragEndEvent } from '@dnd-kit/core'
@@ -43,6 +43,8 @@ interface NoteData {
   id: number
   title: string
   purpose?: string
+  // True when the note was reached through an accepted share — the editor renders read-only.
+  read_only?: boolean
 }
 
 const bricolage = "'Quicksand', sans-serif"
@@ -157,6 +159,13 @@ export function NoteEditorPage() {
   const [folder, setFolder] = useState<LocalFolder | null>(null)
   const accent = getSwatch(folder?.color ?? 'violet')
   const wordCount = useMemo(() => countWords(sections), [sections])
+
+  // A note reached through an accepted share is read-only: the docks, add-block and per-block
+  // controls are hidden and autosave never fires. The backend also 404s any write from a
+  // non-owner, so this is a UI concern only. A ref lets the save closures (bound once) see it.
+  const readOnly = Boolean(note?.read_only)
+  const readOnlyRef = useRef(readOnly)
+  readOnlyRef.current = readOnly
 
   // No session → back to login.
   useEffect(() => {
@@ -457,7 +466,8 @@ export function NoteEditorPage() {
   // schedules another pass; only a clean run (no edits since it started) lands on 'saved'.
   const persist = useCallback(async () => {
     const noteId = noteIdRef.current
-    if (!noteId || savingRef.current) return
+    // Never write back a read-only (shared) note.
+    if (!noteId || savingRef.current || readOnlyRef.current) return
     const seqAtStart = changeSeq.current
     savingRef.current = true
     setSaveStatus('saving')
@@ -508,7 +518,7 @@ export function NoteEditorPage() {
   // entirely when there's nothing new since the last durable save.
   const flushNow = useCallback(() => {
     const noteId = noteIdRef.current
-    if (!noteId || changeSeq.current === savedSeq.current) return
+    if (!noteId || changeSeq.current === savedSeq.current || readOnlyRef.current) return
     const secs = sectionsRef.current
     saveLocalSections(parseInt(noteId), secs)
     try {
@@ -700,19 +710,27 @@ export function NoteEditorPage() {
               <Download className="h-4 w-4" />
               <span>Export</span>
             </button>
-            {/* Passive auto-save indicator (the editor saves itself — no button needed). */}
-            <div
-              aria-live="polite"
-              title="Your changes save automatically"
-              className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] px-[14px] py-2.5 text-[13px] font-semibold text-[var(--text-secondary)]"
-            >
-              {saveStatus === 'saved' ? (
-                <Check className="h-4 w-4 text-emerald-500" />
-              ) : (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              )}
-              <span>{saveStatus === 'saved' ? 'Saved' : 'Saving…'}</span>
-            </div>
+            {/* Passive auto-save indicator (the editor saves itself — no button needed).
+                A shared note is read-only, so the pill shows that instead. */}
+            {readOnly ? (
+              <div className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] px-[14px] py-2.5 text-[13px] font-semibold text-[var(--text-secondary)]">
+                <Lock className="h-4 w-4" />
+                <span>Read-only</span>
+              </div>
+            ) : (
+              <div
+                aria-live="polite"
+                title="Your changes save automatically"
+                className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] px-[14px] py-2.5 text-[13px] font-semibold text-[var(--text-secondary)]"
+              >
+                {saveStatus === 'saved' ? (
+                  <Check className="h-4 w-4 text-emerald-500" />
+                ) : (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                )}
+                <span>{saveStatus === 'saved' ? 'Saved' : 'Saving…'}</span>
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -720,7 +738,7 @@ export function NoteEditorPage() {
       <div className="relative z-[1] mx-auto max-w-[1500px] px-5 pb-24 pt-6 sm:px-10">
         <section className="mb-6 print:hidden">
           <div className="mb-3.5 flex flex-wrap items-center gap-2.5 text-[11px] uppercase tracking-[0.06em] text-[var(--text-secondary)]">
-            <span>{saveStatus === 'saved' ? 'all changes saved' : 'saving…'}</span>
+            <span>{readOnly ? 'read-only' : saveStatus === 'saved' ? 'all changes saved' : 'saving…'}</span>
             <span className="opacity-40">·</span>
             <span>{wordCount} {wordCount === 1 ? 'word' : 'words'}</span>
           </div>
@@ -739,9 +757,9 @@ export function NoteEditorPage() {
             Both side panels sticky so they stay in view, and share one baseline via the
             grid row's items-start. Below md they collapse so the canvas isn't squished. */}
         <main className="flex items-start gap-6 print:block">
-          {/* LEFT — drag to add */}
+          {/* LEFT — drag to add (hidden on read-only shared notes) */}
           <AnimatePresence initial={false}>
-          {leftOpen && (
+          {leftOpen && !readOnly && (
             <motion.aside
               key="left-panel"
               initial={{ width: 0, opacity: 0 }}
@@ -781,6 +799,7 @@ export function NoteEditorPage() {
             layoutRows={layoutRows}
             sections={sections}
             isLoading={isLoading}
+            readOnly={readOnly}
             activeDragItem={activeDragItem}
             updateSectionContentLocal={updateSectionContentLocal}
             updateSectionTitleLocal={updateSectionTitleLocal}
@@ -790,9 +809,9 @@ export function NoteEditorPage() {
             addSectionAt={addSectionAt}
           />
 
-          {/* RIGHT — tools */}
+          {/* RIGHT — tools (hidden on read-only shared notes) */}
           <AnimatePresence initial={false}>
-          {rightOpen && (
+          {rightOpen && !readOnly && (
             <motion.aside
               key="right-panel"
               initial={{ width: 0, opacity: 0 }}
@@ -843,6 +862,7 @@ export function NoteEditorPage() {
         ) : null}
       </DragOverlay>
 
+      {!readOnly && (
       <button
         onClick={() => setLeftOpen((v) => !v)}
         className="fixed bottom-6 left-6 z-50 hidden h-12 w-12 items-center justify-center rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-secondary)] shadow-[0_14px_30px_-12px_rgba(27,19,38,0.4)] transition-all hover:text-[var(--text-primary)] md:flex print:hidden"
@@ -851,7 +871,9 @@ export function NoteEditorPage() {
       >
         {leftOpen ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
       </button>
+      )}
 
+      {!readOnly && (
       <button
         onClick={() => setRightOpen((v) => !v)}
         className="fixed bottom-6 right-6 z-50 hidden h-12 w-12 items-center justify-center rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-secondary)] shadow-[0_14px_30px_-12px_rgba(27,19,38,0.4)] transition-all hover:text-[var(--text-primary)] md:flex print:hidden"
@@ -860,6 +882,7 @@ export function NoteEditorPage() {
       >
         {rightOpen ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
       </button>
+      )}
 
       {/* Subtle scroll affordances — stacked in the corner (above the right panel
           toggle on desktop), faint until hovered, and glide smoothly. Each is live
@@ -889,7 +912,7 @@ export function NoteEditorPage() {
   )
 }
 
-function DroppableCanvas({ contentRef, layoutMode, layoutRows, sections, isLoading, activeDragItem, updateSectionContentLocal, updateSectionTitleLocal, deleteSection, copiedBlock, setCopiedBlock, addSectionAt }: any) {
+function DroppableCanvas({ contentRef, layoutMode, layoutRows, sections, isLoading, readOnly, activeDragItem, updateSectionContentLocal, updateSectionTitleLocal, deleteSection, copiedBlock, setCopiedBlock, addSectionAt }: any) {
   const { setNodeRef, isOver } = useDroppable({ id: 'canvas-droppable' })
   return (
     <section className="flex min-w-0 flex-1 justify-center print:block">
@@ -897,11 +920,17 @@ function DroppableCanvas({ contentRef, layoutMode, layoutRows, sections, isLoadi
         {isLoading ? (
            <div className="flex justify-center pt-20"><Loader2 className="h-6 w-6 animate-spin text-[var(--text-secondary)]" /></div>
         ) : sections.length === 0 ? (
-          <div ref={setNodeRef}>
-            <EmptyNote isOver={isOver} accent="var(--accent)" addSectionAt={addSectionAt} />
-          </div>
+          readOnly ? (
+            <div className="py-20 text-center text-[var(--text-secondary)]">This note is empty.</div>
+          ) : (
+            <div ref={setNodeRef}>
+              <EmptyNote isOver={isOver} accent="var(--accent)" addSectionAt={addSectionAt} />
+            </div>
+          )
         ) : (
-          <div className="flex h-full min-h-[500px] flex-col space-y-6">
+          // pointer-events-none on read-only makes every block non-interactive (no hover
+          // menus, no editing) without touching each block component.
+          <div className={`flex h-full min-h-[500px] flex-col space-y-6 ${readOnly ? 'pointer-events-none' : ''}`}>
             <AnimatePresence>
               {layoutRows.map((rowArr: number[]) => (
                 <div key={`row-${rowArr.join()}`} className="flex w-full flex-row items-start gap-4">
@@ -941,7 +970,9 @@ function DroppableCanvas({ contentRef, layoutMode, layoutRows, sections, isLoadi
                 </div>
               ))}
             </AnimatePresence>
-            {/* The general canvas dropzone is a large spacer at the bottom to catch appended blocks */}
+            {/* The general canvas dropzone is a large spacer at the bottom to catch appended
+                blocks. Read-only (shared) notes have no add affordance. */}
+            {!readOnly && (
             <div ref={setNodeRef} className={`mt-6 flex min-h-[120px] w-full flex-1 items-center justify-center rounded-xl border-2 transition-all ${isOver ? 'border-dashed' : 'border-transparent'}`} style={isOver ? { borderColor: 'var(--accent)', background: 'var(--accent-tint)', color: 'var(--accent)' } : undefined}>
                 {isOver && activeDragItem && (
                    <div className="flex items-center gap-2 font-medium">
@@ -956,6 +987,7 @@ function DroppableCanvas({ contentRef, layoutMode, layoutRows, sections, isLoadi
                   </button>
                 )}
             </div>
+            )}
           </div>
         )}
       </div>

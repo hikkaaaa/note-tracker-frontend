@@ -49,6 +49,9 @@ export interface LocalNote {
   // Two independent organizational marks (see backend Note model).
   starred: boolean
   pinned: boolean
+  // True when reached through an accepted share — the note renders read-only. Optional so
+  // owned notes (the common case) omit it.
+  readOnly?: boolean
   // Notes have no color of their own — they always inherit their parent folder's color.
 }
 
@@ -63,6 +66,10 @@ export interface LocalFolder {
   // filter. Empty when unknown.
   lastActivity: string
   notes: LocalNote[]
+  // Set on folders reached through an accepted share: read-only browse, plus who shared it.
+  readOnly?: boolean
+  sharedBy?: string
+  shareId?: number
 }
 
 export interface LocalSection {

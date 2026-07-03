@@ -24,6 +24,10 @@ export function SiteHeader({ cta, homeActive = false }: SiteHeaderProps) {
 
       <nav
         data-cursor-block
+        // Temporarily hidden: "Home" is the only nav item for now. visibility:hidden keeps
+        // the element (and its center grid column) in place so nothing shifts — remove this
+        // style to bring the nav back once there are more buttons to show.
+        style={{ visibility: 'hidden' }}
         className="hidden rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] p-1.5 shadow-[0_12px_30px_-18px_rgba(27,19,38,0.18)] lg:flex lg:gap-0.5"
       >
         {homeActive ? (
